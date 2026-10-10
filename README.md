@@ -49,6 +49,17 @@ Se è **`1.0.0_EH32_SOP_2502201114`** puoi usare l'APK pronto: **[scaricalo qui]
 
 ## Installazione
 
+### Opzione A — Da chiavetta USB (senza PC)
+
+1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/raw/main/apk/RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk)**
+   e copialo su una chiavetta USB (FAT32 o exFAT).
+2. Inserisci la chiavetta nella porta USB dell'auto.
+3. Apri il **gestore file** dell'infotainment, tocca l'APK e conferma **Installa**
+   (viene proposto come aggiornamento di un'app esistente).
+4. **Riavvia l'unità** (vedi sotto).
+
+### Opzione B — Con ADB
+
 Serve ADB attivo sull'unità (per l'MG4: [ADB_util di Leon Kerman, thread XDA](https://xdaforums.com/t/mg4-electric-aaos-9-playing-and-possibly-other-mg-models.4697712/post-90591053)).
 
 ```bash
@@ -70,6 +81,10 @@ adb uninstall com.saicmotor.service.radio
 ```
 
 Poi riavvia: torna automaticamente la versione di fabbrica (rimane intatta in `/system`).
+
+Senza PC: se le Impostazioni dell'auto mostrano l'elenco delle app, apri il servizio radio
+(`com.saicmotor.service.radio`) e scegli **Disinstalla aggiornamenti**, poi riavvia.
+Non tutte le versioni del firmware mostrano questa voce: in quel caso serve ADB.
 
 ---
 
