@@ -33,7 +33,7 @@ Sviluppato e verificato su infotainment **SWI68-29958-1300R69**, servizio radio
 
 | Firmware | Stato |
 |---|---|
-| SAIC 1.0, SWI68-29958-1300**R69**, servizio `1.0.0_EH32_SOP_2502201114` | ✅ [APK pronto nelle Releases](../../releases/latest) |
+| SAIC 1.0, SWI68-29958-1300**R69**, servizio `1.0.0_EH32_SOP_2502201114` | ✅ [APK pronto](apk/) |
 | SAIC 1.0, altre release (R59, R63, R67, R71…) | 🔧 Usa lo **script di build** sul tuo APK: verifica da solo se il codice è compatibile |
 | EH32 LL (`com.saicmotor.radio`) | ❌ Firmware diverso → [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) |
 | Color Radio | ❌ Non supportato |
@@ -44,7 +44,7 @@ Controlla la versione del tuo servizio radio:
 adb shell dumpsys package com.saicmotor.service.radio | grep versionName
 ```
 
-Se è **`1.0.0_EH32_SOP_2502201114`** puoi usare l'APK pronto. Altrimenti costruisci il tuo (sotto).
+Se è **`1.0.0_EH32_SOP_2502201114`** puoi usare l'APK pronto: **[scaricalo qui](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/raw/main/apk/RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk)** (SHA-256 in [`apk/SHA256SUMS.txt`](apk/SHA256SUMS.txt)). Altrimenti costruisci il tuo (sotto).
 
 ---
 
@@ -138,7 +138,7 @@ per questo firmware (impronta SHA-256 `C8:A2:E9:BC:…:2A:B8`).
 
 Progetto non ufficiale, non affiliato a SAIC Motor o MG. Modifichi il software della tua auto a tuo rischio.
 Il codice originale del servizio radio appartiene a SAIC Motor. Il codice sorgente di questo repository contiene solo le
-modifiche (script, hook, classe `RadioFix`, licenza MIT); l'APK nelle Releases include il servizio SAIC modificato.
+modifiche (script, hook, classe `RadioFix`, licenza MIT); l'APK nella cartella `apk/` include il servizio SAIC modificato.
 
 Grazie a [Skittle6938](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) per l'idea delle copertine DAB+ sulla
 home e della ripresa automatica (firmware LL).
