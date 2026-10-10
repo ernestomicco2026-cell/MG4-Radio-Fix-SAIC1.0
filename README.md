@@ -35,8 +35,7 @@ Sviluppato e verificato su infotainment **SWI68-29958-1300R69**, servizio radio
 |---|---|
 | SAIC 1.0, SWI68-29958-1300**R69**, servizio `1.0.0_EH32_SOP_2502201114` | ✅ [APK pronto](apk/) |
 | SAIC 1.0, altre release (R59, R63, R67, R71…) | 🔧 Usa lo **script di build** sul tuo APK: verifica da solo se il codice è compatibile |
-| EH32 LL (`com.saicmotor.radio`) | ❌ Firmware diverso → [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) |
-| Color Radio | ❌ Non supportato |
+| Color Radio | ❌ Non supportato |(https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) |
 
 Controlla la versione del tuo servizio radio:
 
