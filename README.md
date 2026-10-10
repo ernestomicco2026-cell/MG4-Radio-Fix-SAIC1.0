@@ -49,42 +49,81 @@ Se è **`1.0.0_EH32_SOP_2502201114`** puoi usare l'APK pronto: **[scaricalo qui]
 
 ## Installazione
 
-### Opzione A — Da chiavetta USB (senza PC)
+**Non serve un computer.** Basta una chiavetta USB: l'APK si installa dal gestore file dell'auto,
+come una normale app.
 
-1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/raw/main/apk/RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk)**
-   e copialo su una chiavetta USB (FAT32 o exFAT).
-2. Inserisci la chiavetta nella porta USB dell'auto.
-3. Apri il **gestore file** dell'infotainment, tocca l'APK e conferma **Installa**
-   (viene proposto come aggiornamento di un'app esistente).
-4. **Riavvia l'unità** (vedi sotto).
+### Perché si può installare da chiavetta
 
-### Opzione B — Con ADB
+Il servizio radio è un'app di sistema già presente sull'auto. Questo APK ha **lo stesso nome di pacchetto**
+(`com.saicmotor.service.radio`) e **la stessa firma digitale** dell'originale. Per questo Android non lo
+tratta come una nuova app, ma come un **aggiornamento** di quella esistente, esattamente come farebbe con un
+aggiornamento ufficiale.
+
+In pratica:
+- **non** compare una nuova icona: il servizio radio lavora in background e lo usa l'app Radio di sempre;
+- **non** cambia la grafica: la schermata della radio resta quella di fabbrica;
+- **non** serve root e la partizione di sistema **non** viene toccata;
+- l'originale resta intatto in `/system` e si può ripristinare in qualsiasi momento.
+
+### Prima di iniziare: controlla la versione
+
+L'APK pronto è costruito per il servizio radio **`1.0.0_EH32_SOP_2502201114`**, presente sull'infotainment
+**SWI68-29958-1300R69** (lo trovi nelle informazioni di sistema dell'auto).
+Con un'altra release il risultato non è garantito: in quel caso costruisci l'APK per la tua versione
+(vedi [sotto](#costruire-lapk-per-la-tua-versione)).
+
+### Opzione A — Da chiavetta USB (consigliata)
+
+1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/raw/main/apk/RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk)**.
+2. Copialo su una chiavetta USB formattata **FAT32** o **exFAT** (anche nella cartella principale va bene).
+3. Con l'auto accesa, inserisci la chiavetta nella porta USB.
+4. Apri il **gestore file** dell'infotainment e vai sulla chiavetta.
+5. Tocca l'APK: comparirà la richiesta di **aggiornare** un'app esistente. Conferma con **Installa**.
+6. Al termine **riavvia l'unità**: tieni premuto il tasto **Home per circa 20 secondi**, finché lo schermo
+   si spegne e si riaccende.
+7. Apri la radio e **rifai una ricerca FM**, così la lista stazioni torna completa.
+
+> ⚠️ **Il riavvio è obbligatorio.** Il servizio radio resta sempre in memoria: finché non riavvii continua
+> a girare la versione vecchia e sembra che l'aggiornamento "non abbia fatto niente".
+
+### Opzione B — Con ADB (da computer)
 
 Serve ADB attivo sull'unità (per l'MG4: [ADB_util di Leon Kerman, thread XDA](https://xdaforums.com/t/mg4-electric-aaos-9-playing-and-possibly-other-mg-models.4697712/post-90591053)).
 
 ```bash
 adb install -r RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk
+adb reboot
 ```
 
-> **Dopo l'installazione RIAVVIA l'unità** (tieni premuto Home ~20 s). Il servizio radio è sempre in memoria:
-> finché non riavvii continua a girare quello vecchio.
+Con ADB puoi anche controllare la versione esatta del servizio prima di installare:
 
-Dopo il primo avvio **rifai una ricerca FM** per ricostruire la lista stazioni completa.
+```bash
+adb shell dumpsys package com.saicmotor.service.radio | grep versionName
+```
 
-L'APK ha lo stesso nome di pacchetto e la stessa firma dell'originale: si installa come **aggiornamento
-dell'app di sistema**. Non serve root e la partizione di sistema non viene modificata.
+### Se qualcosa non va
+
+| Messaggio / situazione | Cosa significa |
+|---|---|
+| **"App non installata"** o **"conflitto con un pacchetto esistente"** | Il servizio radio della tua auto è firmato con un'altra chiave o è di un firmware diverso (es. LL o Color Radio). Questo APK non è per la tua auto. |
+| Il gestore file **non apre** gli APK | Su alcune versioni l'installazione da gestore file è bloccata: usa l'Opzione B. |
+| Dopo l'installazione **non cambia nulla** | Non hai riavviato l'unità (punto 6). |
+| La lista FM è **vuota o incompleta** | Rifai una ricerca FM dall'app Radio (punto 7). |
 
 ### Tornare all'originale
 
+**Senza computer:** apri le Impostazioni dell'auto → elenco delle app → servizio radio
+(`com.saicmotor.service.radio`) → **Disinstalla aggiornamenti**, poi riavvia.
+Non tutte le versioni del firmware mostrano questa voce: in quel caso serve ADB.
+
+**Con ADB:**
+
 ```bash
 adb uninstall com.saicmotor.service.radio
+adb reboot
 ```
 
-Poi riavvia: torna automaticamente la versione di fabbrica (rimane intatta in `/system`).
-
-Senza PC: se le Impostazioni dell'auto mostrano l'elenco delle app, apri il servizio radio
-(`com.saicmotor.service.radio`) e scegli **Disinstalla aggiornamenti**, poi riavvia.
-Non tutte le versioni del firmware mostrano questa voce: in quel caso serve ADB.
+In entrambi i casi torna automaticamente la versione di fabbrica, che è rimasta intatta in `/system`.
 
 ---
 
