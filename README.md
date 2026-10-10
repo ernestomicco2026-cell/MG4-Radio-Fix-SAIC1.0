@@ -33,7 +33,7 @@ Sviluppato e verificato su infotainment **SWI68-29958-1300R69**, servizio radio
 
 | Firmware | Stato |
 |---|---|
-| SAIC 1.0, SWI68-29958-1300**R69**, servizio `1.0.0_EH32_SOP_2502201114` | ✅ [APK pronto](apk/) |
+| SAIC 1.0, SWI68-29958-1300**R69**, servizio `1.0.0_EH32_SOP_2502201114` | ✅ [APK pronto nelle Releases](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest) |
 | SAIC 1.0, altre release (R59, R63, R67, R71…) | 🔧 Usa lo **script di build** sul tuo APK: verifica da solo se il codice è compatibile |
 | Color Radio | ❌ Non supportato |(https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) |
 
@@ -43,7 +43,7 @@ Controlla la versione del tuo servizio radio:
 adb shell dumpsys package com.saicmotor.service.radio | grep versionName
 ```
 
-Se è **`1.0.0_EH32_SOP_2502201114`** puoi usare l'APK pronto: **[scaricalo qui](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/raw/main/apk/RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk)** (SHA-256 in [`apk/SHA256SUMS.txt`](apk/SHA256SUMS.txt)). Altrimenti costruisci il tuo (sotto).
+Se è **`1.0.0_EH32_SOP_2502201114`** puoi usare l'APK pronto: **[scaricalo qui](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** (SHA-256 indicato nella release). Altrimenti costruisci il tuo (sotto).
 
 ---
 
@@ -74,7 +74,7 @@ Con un'altra release il risultato non è garantito: in quel caso costruisci l'AP
 
 ### Opzione A — Da chiavetta USB (consigliata)
 
-1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/raw/main/apk/RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk)**.
+1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)**.
 2. Copialo su una chiavetta USB formattata **FAT32** o **exFAT** (anche nella cartella principale va bene).
 3. Con l'auto accesa, inserisci la chiavetta nella porta USB.
 4. Apri il **gestore file** dell'infotainment e vai sulla chiavetta.
@@ -187,11 +187,23 @@ per questo firmware (impronta SHA-256 `C8:A2:E9:BC:…:2A:B8`).
 
 ---
 
+## Come vengono create le release
+
+Le release sono **costruite e firmate automaticamente da GitHub Actions**
+([`.github/workflows/release.yml`](.github/workflows/release.yml)) a partire dal codice di questo repository:
+ogni APK pubblicato corrisponde esattamente ai sorgenti visibili qui.
+
+Per costruire serve l'APK originale del servizio radio. Nel repository è presente solo **cifrato**
+(`firmware/*.apk.enc`, AES-256): viene decifrato solo durante la build, con una chiave conservata nei
+*Secrets* privati del repository, e non viene mai pubblicato in chiaro.
+
+---
+
 ## Avvertenze
 
 Progetto non ufficiale, non affiliato a SAIC Motor o MG. Modifichi il software della tua auto a tuo rischio.
 Il codice originale del servizio radio appartiene a SAIC Motor. Il codice sorgente di questo repository contiene solo le
-modifiche (script, hook, classe `RadioFix`, licenza MIT); l'APK nella cartella `apk/` include il servizio SAIC modificato.
+modifiche (script, hook, classe `RadioFix`, licenza MIT); l'APK nelle Releases include il servizio SAIC modificato.
 
 Grazie a [Skittle6938](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) per l'idea delle copertine DAB+ sulla
 home e della ripresa automatica (firmware LL).
