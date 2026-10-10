@@ -74,7 +74,7 @@ Con un'altra release il risultato non è garantito: in quel caso costruisci l'AP
 
 ### Opzione A — Da chiavetta USB (consigliata)
 
-1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)**.
+1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** dalla sezione **Assets** dell'ultima release.
 2. Copialo su una chiavetta USB formattata **FAT32** o **exFAT** (anche nella cartella principale va bene).
 3. Con l'auto accesa, inserisci la chiavetta nella porta USB.
 4. Apri il **gestore file** dell'infotainment e vai sulla chiavetta.
