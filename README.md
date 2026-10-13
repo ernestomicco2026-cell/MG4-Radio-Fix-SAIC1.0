@@ -1,5 +1,7 @@
 # MG4 Radio Fix — SAIC 1.0 (EH32 EU)
 
+🇮🇹 Italiano · [🇬🇧 English](README.en.md)
+
 Correzioni al **servizio radio originale** dell'infotainment MG4 con sistema **SAIC 1.0**
 (allestimenti Comfort, Luxury, Trophy, XPower).
 
@@ -8,11 +10,12 @@ Correzioni al **servizio radio originale** dell'infotainment MG4 con sistema **S
 > [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix)).
 
 > 🛑 **L'APK pronto è SOLO per l'infotainment SWI68-29958-1300R69** (servizio radio
-> `com.saicmotor.service.radio` versione **`1.0.0_EH32_SOP_2502201114`**).
+> `com.saicmotor.service.radio` versione **`1.0.0_EH32_SOP_2502201114`**). La tua versione la trovi
+> nelle informazioni di sistema dell'auto.
 > È stato **provato solo su MG4 Luxury**. Su altre release (R59, R63, R67, R71…) **non installarlo**:
 > costruisci l'APK per la tua versione con lo [script di build](#costruire-lapk-per-la-tua-versione).
-> Lo trovi nelle informazioni di sistema dell'auto. Se l'hai già installato per errore, vedi
-> [Tornare all'originale](#tornare-alloriginale): si toglie anche **senza computer**.
+> Se l'hai già installato per errore, vedi [Tornare all'originale](#tornare-alloriginale):
+> si toglie anche **senza computer**.
 
 ---
 
