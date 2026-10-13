@@ -7,8 +7,12 @@ Correzioni al **servizio radio originale** dell'infotainment MG4 con sistema **S
 > (dove la radio è un'unica app `com.saicmotor.radio`: per quello esiste
 > [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix)).
 
-Sviluppato e verificato su infotainment **SWI68-29958-1300R69**, servizio radio
-`com.saicmotor.service.radio` versione **`1.0.0_EH32_SOP_2502201114`**.
+> 🛑 **L'APK pronto è SOLO per l'infotainment SWI68-29958-1300R69** (servizio radio
+> `com.saicmotor.service.radio` versione **`1.0.0_EH32_SOP_2502201114`**).
+> È stato **provato solo su MG4 Luxury**. Su altre release (R59, R63, R67, R71…) **non installarlo**:
+> costruisci l'APK per la tua versione con lo [script di build](#costruire-lapk-per-la-tua-versione).
+> Lo trovi nelle informazioni di sistema dell'auto. Se l'hai già installato per errore, vedi
+> [Tornare all'originale](#tornare-alloriginale): si toglie anche **senza computer**.
 
 ---
 
@@ -33,9 +37,10 @@ Sviluppato e verificato su infotainment **SWI68-29958-1300R69**, servizio radio
 
 | Firmware | Stato |
 |---|---|
-| SAIC 1.0, SWI68-29958-1300**R69**, servizio `1.0.0_EH32_SOP_2502201114` | ✅ [APK pronto nelle Releases](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest) |
-| SAIC 1.0, altre release (R59, R63, R67, R71…) | 🔧 Usa lo **script di build** sul tuo APK: verifica da solo se il codice è compatibile |
-| Color Radio | ❌ Non supportato |(https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) |
+| SAIC 1.0, SWI68-29958-1300**R69**, servizio `1.0.0_EH32_SOP_2502201114` | ✅ [APK pronto nelle Releases](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest), **provato su MG4 Luxury** (Comfort, Trophy e XPower non ancora provati) |
+| SAIC 1.0, altre release (R59, R63, R67, R71…) | ⚠️ **Non usare l'APK pronto.** Usa lo **script di build** sul tuo APK: verifica da solo se il codice è compatibile |
+| EH32 LL (`com.saicmotor.radio`) | ❌ Firmware diverso → [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) |
+| Color Radio | ❌ Non supportato |
 
 Controlla la versione del tuo servizio radio:
 
@@ -67,10 +72,11 @@ In pratica:
 
 ### Prima di iniziare: controlla la versione
 
-L'APK pronto è costruito per il servizio radio **`1.0.0_EH32_SOP_2502201114`**, presente sull'infotainment
-**SWI68-29958-1300R69** (lo trovi nelle informazioni di sistema dell'auto).
-Con un'altra release il risultato non è garantito: in quel caso costruisci l'APK per la tua versione
-(vedi [sotto](#costruire-lapk-per-la-tua-versione)).
+L'APK pronto è costruito **solo** per il servizio radio **`1.0.0_EH32_SOP_2502201114`**, presente
+sull'infotainment **SWI68-29958-1300R69** (lo trovi nelle informazioni di sistema dell'auto), ed è stato
+provato su **MG4 Luxury**.
+**Se la tua versione non è R69, non installarlo**: la radio potrebbe smettere di funzionare.
+Costruisci invece l'APK per la tua versione (vedi [sotto](#costruire-lapk-per-la-tua-versione)).
 
 ### Opzione A — Da chiavetta USB (consigliata)
 
@@ -108,22 +114,49 @@ adb shell dumpsys package com.saicmotor.service.radio | grep versionName
 | **"App non installata"** o **"conflitto con un pacchetto esistente"** | Il servizio radio della tua auto è firmato con un'altra chiave o è di un firmware diverso (es. LL o Color Radio). Questo APK non è per la tua auto. |
 | Il gestore file **non apre** gli APK | Su alcune versioni l'installazione da gestore file è bloccata: usa l'Opzione B. |
 | Dopo l'installazione **non cambia nulla** | Non hai riavviato l'unità (punto 6). |
+| Dopo l'installazione **la radio non funziona più** | Probabilmente la tua versione non è la R69. Togli la patch: vedi [Tornare all'originale](#tornare-alloriginale). |
 | La lista FM è **vuota o incompleta** | Rifai una ricerca FM dall'app Radio (punto 7). |
 
 ### Tornare all'originale
 
-**Senza computer:** apri le Impostazioni dell'auto → elenco delle app → servizio radio
-(`com.saicmotor.service.radio`) → **Disinstalla aggiornamenti**, poi riavvia.
-Non tutte le versioni del firmware mostrano questa voce: in quel caso serve ADB.
+Ti serve anche se hai installato l'APK su una versione sbagliata (non R69) e la radio non funziona più.
+L'originale di fabbrica è rimasto intatto in `/system`: basta togliere l'aggiornamento e riavviare.
 
-**Con ADB:**
+**1. Dalle Impostazioni (senza computer):** Impostazioni dell'auto → elenco delle app → mostra le app di
+sistema → servizio radio (`com.saicmotor.service.radio`, a volte "RadioService") → menu ⋮ →
+**Disinstalla aggiornamenti**, poi riavvia. Non tutte le versioni del firmware mostrano questa voce:
+in quel caso usa il punto 2.
+
+**2. Con Radio Fix Remover, da chiavetta USB (senza computer e senza ADB):**
+
+1. Scarica **`RadioFixRemover_1.0.apk`** dalla sezione **Assets** dell'[ultima release](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)
+   e copialo su una chiavetta USB **FAT32** o **exFAT**.
+2. Inserisci la chiavetta, apri il **gestore file** dell'auto, tocca l'APK e conferma **Installa**
+   (come per la patch).
+3. Apri **Radio Fix Remover** e tocca **Remove Radio Fix**. Se Android chiede
+   *"Sostituire l'app con la versione di fabbrica?"*, conferma.
+4. Quando la schermata dice che è attivo il servizio radio di fabbrica, tocca **Restart head unit**
+   (oppure tieni premuto Home per circa 20 secondi).
+5. Dopo il riavvio riaprila e tocca **Uninstall this helper app** per toglierla.
+
+L'app è firmata con la stessa chiave di sistema della patch: per questo può rimuovere l'aggiornamento come farebbe
+`adb uninstall`. Funziona su qualsiasi versione SAIC 1.0 con servizio radio firmato AOSP, non solo sulla R69.
+Il codice è in [`remover/`](remover/).
+
+**3. Con ADB:**
 
 ```bash
 adb uninstall com.saicmotor.service.radio
 adb reboot
 ```
 
-In entrambi i casi torna automaticamente la versione di fabbrica, che è rimasta intatta in `/system`.
+In tutti i casi torna automaticamente la versione di fabbrica, che è rimasta intatta in `/system`.
+
+**Ultima spiaggia:** il ripristino dei dati di fabbrica dell'infotainment toglie anche la patch, ma cancella
+impostazioni, profili, telefoni abbinati e le altre app installate.
+
+> ⚠️ Non installare sopra l'APK originale preso da un'altra auto: se la versione è diversa dalla tua
+> avresti di nuovo un servizio radio che non corrisponde al tuo sistema.
 
 ---
 

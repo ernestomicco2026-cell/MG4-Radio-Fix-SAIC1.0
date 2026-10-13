@@ -53,6 +53,7 @@ jobs:
           cd dist
           ../patcher/build.sh "$RUNNER_TEMP/fw/original.apk"
           rm -f "$RUNNER_TEMP/fw/original.apk"
+          ../remover/build.sh
           ls -la
 
       - name: Prepara la descrizione
@@ -62,6 +63,7 @@ jobs:
           APK="RadioService_radiofix1_${FW_VERSION}.apk"
           SHA="$(sha256sum "dist/$APK" | cut -d' ' -f1)"
           echo "$SHA  $APK" > "dist/SHA256SUMS.txt"
+          (cd dist && sha256sum RadioFixRemover_*.apk) >> "dist/SHA256SUMS.txt"
           sed -e "s/@SHA256@/$SHA/g" -e "s/@APK@/$APK/g" -e "s/@FW_VERSION@/$FW_VERSION/g" \
               -e "s/@FW_SWI@/$FW_SWI/g" .github/release-notes.md > "$RUNNER_TEMP/notes.md"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -75,4 +77,5 @@ jobs:
           body_path: ${{ runner.temp }}/notes.md
           files: |
             ${{ steps.notes.outputs.apk }}
+            dist/RadioFixRemover_*.apk
             dist/SHA256SUMS.txt

@@ -4,6 +4,10 @@ Correzioni al **servizio radio originale** dell'MG4 con infotainment **SAIC 1.0*
 > (per quello c'è [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix)).
 > Costruita per infotainment **@FW_SWI@**, servizio radio `@FW_VERSION@`.
 
+> 🛑 **Questo APK è SOLO per @FW_SWI@** ed è stato **provato su MG4 Luxury**.
+> Se la tua versione è diversa (R59, R63, R67, R71…) **non installarlo**: vedi *Hai un'altra versione del firmware?* più sotto.
+> Se l'hai già installato per errore, lo togli anche senza computer con **RadioFixRemover** (vedi *Tornare all'originale*).
+
 ## Cosa corregge
 
 - 📻 **FM bloccato su una stazione** — la lista stazioni non si riduce più a un'unica frequenza (es. resta sulla 90.90 e avanti/indietro non cambiano). Ora si aggiorna solo durante una vera ricerca.
@@ -32,7 +36,8 @@ La **grafica non cambia**: l'app Radio resta quella di fabbrica.
 
 ## Tornare all'originale
 
-- **Senza PC:** Impostazioni → elenco app → servizio radio (`com.saicmotor.service.radio`) → **Disinstalla aggiornamenti**, poi riavvia. Questa voce non c'è su tutti i firmware.
+- **Senza PC, dalle Impostazioni:** Impostazioni → elenco app → servizio radio (`com.saicmotor.service.radio`) → **Disinstalla aggiornamenti**, poi riavvia. Questa voce non c'è su tutti i firmware.
+- **Senza PC e senza ADB, con RadioFixRemover:** scarica **`RadioFixRemover_1.0.apk`** qui sotto in **Assets**, installalo da chiavetta come la patch, aprilo e tocca **Remove Radio Fix**. Poi **Restart head unit** e, dopo il riavvio, **Uninstall this helper app**.
 - **Con ADB:** `adb uninstall com.saicmotor.service.radio` e poi `adb reboot`.
 
 La versione di fabbrica resta intatta e torna automaticamente.
