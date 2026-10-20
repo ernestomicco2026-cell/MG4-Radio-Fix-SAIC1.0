@@ -11,6 +11,7 @@ Correzioni al **servizio radio originale** dell'MG4 con infotainment **SAIC 1.0*
 ## Cosa corregge
 
 - 📻 **FM bloccato su una stazione** — la lista stazioni non si riduce più a un'unica frequenza (es. resta sulla 90.90 e avanti/indietro non cambiano). Ora si aggiorna solo durante una vera ricerca.
+- 📶 **Cambio frequenza automatico (AF)** — *novità v1.1.* Quando il segnale cala e il sintonizzatore passa da solo a un'altra frequenza della stessa stazione, la radio ora la segue invece di restare sulla frequenza vecchia. Serve **AF attivo** nelle impostazioni della radio.
 - ▶️ **Ripresa all'accensione** — se stavi ascoltando la radio, quando riaccendi l'auto riparte da sola. Se l'avevi messa in pausa tu, o usavi un'altra sorgente (CarPlay, Bluetooth…), resta ferma.
 - 🖼️ **Loghi DAB** — corretto un errore del firmware che non abbinava mai il logo all'ultima stazione ricevuta. Ora vengono accettati anche i loghi rettangolari, resi quadrati senza deformarli.
 - 🏠 **Copertine DAB+ sulla schermata home** — le immagini trasmesse dalla stazione compaiono anche nella home, non solo nell'app Radio.

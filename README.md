@@ -24,6 +24,7 @@ Correzioni al **servizio radio originale** dell'infotainment MG4 con sistema **S
 | Problema | Causa nel firmware originale | Correzione |
 |---|---|---|
 | **FM bloccato su una sola stazione** (es. resta sulla 90.90 e avanti/indietro non cambiano) | Ogni frequenza ricevuta, anche fuori dalla ricerca (es. dopo un seek), viene messa in una lista che 3 s dopo **sostituisce** l'intera lista stazioni | La lista si aggiorna solo durante una vera scansione |
+| **FM che non cambia frequenza quando il segnale cala** (v1.1) | Quando la stazione si sente male il sintonizzatore passa da solo a un'altra frequenza della stessa stazione (AF/RDS), ma il servizio resta su quella vecchia | Il servizio segue il cambio di frequenza (serve **AF attivo** nelle impostazioni della radio) |
 | **La radio non riparte all'accensione** | Allo spegnimento la radio perde il focus audio e salva lo stato "in pausa" | Se stavi ascoltando la radio, all'avvio riparte; se l'avevi messa in pausa tu o usavi un'altra sorgente (CarPlay, Bluetooth…) resta ferma |
 | **Loghi DAB che non compaiono** | Errore nel ciclo di abbinamento logo/stazione (`size() - 1`): l'ultima stazione ricevuta non viene mai controllata | Ciclo corretto |
 | **Loghi DAB scartati** | Accettati solo loghi `logo_unrestricted` perfettamente quadrati | Accettati anche quelli rettangolari, resi quadrati (ritaglio delle bande uniformi o centratura) |
@@ -83,7 +84,7 @@ Costruisci invece l'APK per la tua versione (vedi [sotto](#costruire-lapk-per-la
 
 ### Opzione A — Da chiavetta USB (consigliata)
 
-1. Scarica **[RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** dalla sezione **Assets** dell'ultima release.
+1. Scarica **[RadioService_radiofix2_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** dalla sezione **Assets** dell'ultima release.
 2. Copialo su una chiavetta USB formattata **FAT32** o **exFAT** (anche nella cartella principale va bene).
 3. Con l'auto accesa, inserisci la chiavetta nella porta USB.
 4. Apri il **gestore file** dell'infotainment e vai sulla chiavetta.
@@ -100,7 +101,7 @@ Costruisci invece l'APK per la tua versione (vedi [sotto](#costruire-lapk-per-la
 Serve ADB attivo sull'unità (per l'MG4: [ADB_util di Leon Kerman, thread XDA](https://xdaforums.com/t/mg4-electric-aaos-9-playing-and-possibly-other-mg-models.4697712/post-90591053)).
 
 ```bash
-adb install -r RadioService_radiofix1_1.0.0_EH32_SOP_2502201114.apk
+adb install -r RadioService_radiofix2_1.0.0_EH32_SOP_2502201114.apk
 adb reboot
 ```
 
@@ -193,7 +194,7 @@ adb logcat -s RadioFix
 ```
 
 Messaggi tipici: `scan start` / `scan over` (ricerca FM), `ignored program info outside scan`
-(una stazione che prima avrebbe "bloccato" la lista), `auto resume`, `restored art`.
+(una stazione che prima avrebbe "bloccato" la lista), `AF follow` (cambio di frequenza seguito), `auto resume`, `restored art`.
 
 ---
 
