@@ -33,6 +33,19 @@ patch('platform/RadioTunerExt.smali',
       '.method public scan(IZ)V\n    .locals 5\n    .param p1, "radioType"    # I\n    .param p2, "forward"    # Z\n',
       '.method public scan(IZ)V\n    .locals 5\n    .param p1, "radioType"    # I\n    .param p2, "forward"    # Z\n\n'
       '    invoke-static {}, ' + FIX + '->onScanStart()V\n')
+for sig, locals_ in (('seek(IZ)V', 5), ('step(IZ)V', 3)):
+    patch('platform/RadioTunerExt.smali',
+          '.method public %s\n    .locals %d\n    .param p1, "radioType"    # I\n    .param p2, "forward"    # Z\n' % (sig, locals_),
+          '.method public %s\n    .locals %d\n    .param p1, "radioType"    # I\n    .param p2, "forward"    # Z\n\n'
+          '    invoke-static {}, %s->onTune()V\n' % (sig, locals_, FIX))
+patch('platform/RadioTunerExt.smali',
+      '.method public tune(Landroid/hardware/radio/ProgramSelector;)V\n    .locals 2\n'
+      '    .param p1, "selector"    # Landroid/hardware/radio/ProgramSelector;\n'
+      '        .annotation build Landroidx/annotation/NonNull;\n        .end annotation\n    .end param\n',
+      '.method public tune(Landroid/hardware/radio/ProgramSelector;)V\n    .locals 2\n'
+      '    .param p1, "selector"    # Landroid/hardware/radio/ProgramSelector;\n'
+      '        .annotation build Landroidx/annotation/NonNull;\n        .end annotation\n    .end param\n\n'
+      '    invoke-static {}, ' + FIX + '->onTune()V\n')
 patch('RadioService.smali',
       '.method private amOrFmScanOver()V\n    .locals 3\n',
       '.method private amOrFmScanOver()V\n    .locals 3\n\n'

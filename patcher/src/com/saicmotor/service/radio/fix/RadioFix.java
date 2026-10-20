@@ -42,6 +42,8 @@ public final class RadioFix {
     private static final long FOCUS_LOSS_WINDOW_MS = 4000;
     private static final long SCAN_TIMEOUT_MS = 180000;
     private static final long CACHE_MIN_INTERVAL_MS = 60000;
+    /** Dopo un nostro tune/step i ProgramInfo in arrivo sono "eco" della sintonia, non un cambio AF. */
+    private static final long TUNE_ECHO_WINDOW_MS = 5000;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
@@ -50,6 +52,8 @@ public final class RadioFix {
     private static volatile long sScanStart = 0;
     private static volatile long sLastFocusLoss = 0;
     private static volatile boolean sBootResumeDone = false;
+    private static volatile long sLastTune = 0;
+    private static volatile RadioService sService;
     private static final Map<String, Long> sLastCacheSave = new HashMap<String, Long>();
 
     private RadioFix() {}
@@ -64,7 +68,13 @@ public final class RadioFix {
     public static void onScanStart() {
         sScanning = true;
         sScanStart = System.currentTimeMillis();
+        sLastTune = sScanStart;
         log("scan start");
+    }
+
+    /** Chiamato a ogni tune/step/seek AM/FM chiesto dal servizio (RadioTunerExt). */
+    public static void onTune() {
+        sLastTune = System.currentTimeMillis();
     }
 
     /** Chiamato quando la lista scansionata viene salvata (RadioService.amOrFmScanOver). */
@@ -78,6 +88,12 @@ public final class RadioFix {
      * dalla scansione (es. dopo un seek): 3 s dopo la lista salvata viene SOSTITUITA da quell'unica
      * stazione e avanti/indietro restano bloccati su di essa. Qui accettiamo i risultati solo
      * durante una scansione (o se la lista e' vuota).
+     *
+     * Fuori dalla scansione un ProgramInfo FM con una frequenza diversa da quella in ascolto, che
+     * non sia l'eco di un nostro tune, e' il sintonizzatore che ha cambiato frequenza da solo
+     * (AF/RDS: stessa stazione su una frequenza con segnale migliore). Il firmware originale lo
+     * "seguiva" solo per effetto collaterale (sostituendo la lista); ora lo seguiamo davvero,
+     * aggiornando la stazione corrente senza toccare la lista.
      */
     public static boolean shouldCollect(RadioManager.ProgramInfo info) {
         try {
@@ -96,12 +112,58 @@ public final class RadioFix {
                 List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(type).toList();
                 if (stored == null || stored.isEmpty()) return true;
             }
-            log("ignored program info outside scan: " + value + " type " + type);
+            if (type == 2) followAf(info);
+            else log("ignored program info outside scan: " + value + " type " + type);
             return false;
         } catch (Throwable t) {
             warn("shouldCollect", t);
             return true;
         }
+    }
+
+    /** Aggiorna la stazione FM corrente quando il sintonizzatore passa da solo a un'altra frequenza. */
+    private static void followAf(RadioManager.ProgramInfo info) {
+        try {
+            RadioService svc = sService;
+            if (svc == null) return;
+            RadioBean found = boxFm(info);
+            if (found == null) return;
+            int freq = found.getFrequencyKhz();
+            RadioBean cur = svc.getCurrentRadioInfo();
+            if (cur == null || cur.getRadioType() != 2) return;
+            int was = cur.getFrequencyKhz();
+            if (freq == was) return; // eco della frequenza in ascolto
+            if (freq < 87500 || freq > 108000) return;
+            long since = System.currentTimeMillis() - sLastTune;
+            if (since < TUNE_ECHO_WINDOW_MS) {
+                log("ignored tune echo " + freq + " (current " + was + ", " + since + " ms after tune)");
+                return;
+            }
+            found.setRadioState(cur.getRadioState());
+            log("AF follow " + was + " -> " + freq + " (" + found.getRadioName() + ")");
+            svc.updateCurrentRadio(found);
+        } catch (Throwable t) {
+            warn("followAf", t);
+        }
+    }
+
+    /**
+     * ProgramInfo FM -> RadioBean come fa il firmware (RadioWrapper.box: nome RDS, preferito...).
+     * Chiamato per riflessione perche' RadioWrapper usa classi nascoste del framework.
+     */
+    private static RadioBean boxFm(RadioManager.ProgramInfo info) {
+        try {
+            Object b = Class.forName("com.saicmotor.service.radio.utils.RadioWrapper")
+                    .getMethod("box", RadioManager.ProgramInfo.class).invoke(null, info);
+            if (b instanceof RadioBean) return (RadioBean) b;
+        } catch (Throwable t) {
+            warn("boxFm", t);
+        }
+        long v = info.getSelector().getPrimaryId().getValue();
+        RadioBean b = new RadioBean();
+        b.setRadioType(2);
+        b.setFrequencyKhz((int) (v < 87500 ? v * 10 : v));
+        return b;
     }
 
     // ---------------------------------------------------------------- DAB: loghi
@@ -419,6 +481,7 @@ public final class RadioFix {
 
     /** Alla creazione del servizio: tentativi di ripresa se il BOOT_COMPLETED arriva troppo presto/tardi. */
     public static void scheduleBootResume(final RadioService svc) {
+        sService = svc;
         long[] delays = {6000, 14000};
         for (long d : delays) {
             MAIN.postDelayed(new Runnable() {
