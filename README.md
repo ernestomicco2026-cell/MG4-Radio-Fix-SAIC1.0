@@ -2,6 +2,8 @@
 
 🇮🇹 Italiano · [🇬🇧 English](README.en.md)
 
+[![Offrimi un caffè con PayPal](https://img.shields.io/badge/Offrimi%20un%20caff%C3%A8-PayPal-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/pool/9tv7fQ36nA?sr=wccr)
+
 Correzioni al **servizio radio originale** dell'infotainment MG4 con sistema **SAIC 1.0**
 (allestimenti Comfort, Luxury, Trophy, XPower).
 
@@ -237,6 +239,16 @@ ogni APK pubblicato corrisponde esattamente ai sorgenti visibili qui.
 Per costruire serve l'APK originale del servizio radio. Nel repository è presente solo **cifrato**
 (`firmware/*.apk.enc`, AES-256): viene decifrato solo durante la build, con una chiave conservata nei
 *Secrets* privati del repository, e non viene mai pubblicato in chiaro.
+
+---
+
+## Sostieni il progetto
+
+MG4 Radio Fix è e resterà **gratuito**. Se ti è utile e ti va di contribuire alle ore passate a svilupparlo e provarlo
+in auto, puoi lasciare una piccola offerta: è del tutto **facoltativa**, e anche una stella al repository o una
+segnalazione di un problema sono un aiuto prezioso. Grazie!
+
+[![Offrimi un caffè con PayPal](https://img.shields.io/badge/Offrimi%20un%20caff%C3%A8-PayPal-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/pool/9tv7fQ36nA?sr=wccr)
 
 ---
 

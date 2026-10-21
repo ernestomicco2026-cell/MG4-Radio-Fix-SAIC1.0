@@ -1,3 +1,5 @@
+[![Offrimi un caffè con PayPal](https://img.shields.io/badge/Offrimi%20un%20caff%C3%A8-PayPal-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/pool/9tv7fQ36nA?sr=wccr) [![Buy me a coffee with PayPal](https://img.shields.io/badge/Buy%20me%20a%20coffee-PayPal-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/pool/9tv7fQ36nA?sr=wccr)
+
 Correzioni al **servizio radio originale** dell'MG4 con infotainment **SAIC 1.0** (EH32 EU).
 
 > ⚠️ **Solo per SAIC 1.0.** Non è per le versioni **Color Radio** né per il firmware **EH32 LL**
