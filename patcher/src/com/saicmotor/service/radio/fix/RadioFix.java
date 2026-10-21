@@ -507,6 +507,94 @@ public final class RadioFix {
         }
     }
 
+    // ---------------------------------------------------------------- stabilita' (radiofix3)
+
+    /**
+     * Rete di sicurezza: un'eccezione non gestita in un thread di lavoro (pool "radio thread #N",
+     * pool di Room) non fa piu' morire il servizio radio. Il thread di lavoro termina, il pool ne
+     * crea un altro. Main thread e HandlerThread (callback del sintonizzatore) restano invariati:
+     * li' l'errore va al gestore originale come prima.
+     */
+    public static void installCrashGuard() {
+        try {
+            final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+            if (prev != null && prev.getClass().getName().startsWith(RadioFix.class.getName())) return;
+            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override public void uncaughtException(Thread t, Throwable e) {
+                    try {
+                        if (isWorkerThread(t)) {
+                            Log.e(TAG, "crash guard: eccezione nel thread " + t.getName()
+                                    + " ignorata, il servizio resta attivo", e);
+                            return;
+                        }
+                    } catch (Throwable ignored) { }
+                    if (prev != null) prev.uncaughtException(t, e);
+                }
+            });
+            log("crash guard attivo");
+        } catch (Throwable t) {
+            warn("installCrashGuard", t);
+        }
+    }
+
+    private static boolean isWorkerThread(Thread t) {
+        if (t == null || t == Looper.getMainLooper().getThread()) return false;
+        String n = t.getName();
+        if (n == null) return false;
+        return n.startsWith("radio thread #") || n.startsWith("arch_disk_io_") || n.startsWith("pool-");
+    }
+
+    /**
+     * Inizio di ProgramAlarm.setProgramReminder. Il firmware fa SimpleDateFormat.parse(getTime())
+     * gestendo solo ParseException: con l'ora null va in NullPointerException e, poiche' il
+     * promemoria resta nel DB, il servizio muore a ogni avvio. Qui un promemoria senza ora valida
+     * o gia' passato non viene programmato e viene tolto dal DB.
+     * @return true per proseguire con il codice originale.
+     */
+    public static boolean checkReminder(com.saicmotor.sdk.radio.bean.DabSubRadioBean bean) {
+        try {
+            if (bean == null) {
+                log("reminder null ignorato");
+                return false;
+            }
+            String time = bean.getTime();
+            String why = null;
+            if (time == null || time.trim().isEmpty()) {
+                why = "senza ora";
+            } else {
+                java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm");
+                f.setLenient(false);
+                java.util.Date d = null;
+                try { d = f.parse(time.trim()); } catch (Throwable ignored) { }
+                if (d == null) why = "ora non valida (" + time + ")";
+                else if (d.getTime() < System.currentTimeMillis()) why = "gia' passato (" + time + ")";
+            }
+            if (why == null) return true;
+            log("reminder DAB " + why + ": rimosso (service " + bean.getServiceId()
+                    + " ensemble " + bean.getEnsembleId() + ")");
+            try {
+                com.saicmotor.service.radio.utils.ProgramAlarm.getInstance().cancelProgramData(bean);
+            } catch (Throwable t) {
+                warn("checkReminder remove", t);
+            }
+            return false;
+        } catch (Throwable t) {
+            warn("checkReminder", t);
+            return false; // nel dubbio non programmare: e' il caso che faceva crashare il servizio
+        }
+    }
+
+    /**
+     * Inizio di RadioManagerExt.initRadioConfig: con la lista moduli vuota (sintonizzatore non
+     * ancora pronto) il firmware fa mModules.get(0) -> IndexOutOfBoundsException.
+     * @return true per proseguire con il codice originale.
+     */
+    public static boolean hasModules(List<?> modules) {
+        boolean ok = modules != null && !modules.isEmpty();
+        if (!ok) log("nessun modulo radio: initRadioConfig saltato, il servizio riprovera'");
+        return ok;
+    }
+
     // ---------------------------------------------------------------- util
 
     private static Object field(Object o, String name) throws Exception {

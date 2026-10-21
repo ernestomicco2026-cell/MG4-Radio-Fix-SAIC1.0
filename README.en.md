@@ -9,9 +9,10 @@ Fixes for the **original radio service** of the MG4 infotainment with the **SAIC
 > (where the radio is a single app, `com.saicmotor.radio`: for that one use
 > [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix)).
 
-> 🛑 **The ready-made APK is ONLY for infotainment SWI68-29958-1300R69** (radio service
+> 🛑 **The ready-made APK is ONLY for infotainment SWI68-29958-1300R69 and R73** (radio service
 > `com.saicmotor.service.radio` version **`1.0.0_EH32_SOP_2502201114`**). You can find your version in
 > the car's system information.
+> R73 has a radio service identical to R69, byte for byte.
 > It has **only been tested on an MG4 Luxury**. On other releases (R59, R63, R67, R71…) **do not install it**:
 > build the APK for your own version with the [build script](#building-the-apk-for-your-version).
 > If you already installed it by mistake, see [Going back to the original](#going-back-to-the-original):
@@ -29,6 +30,9 @@ Fixes for the **original radio service** of the MG4 infotainment with the **SAIC
 | **DAB logos not showing** | Bug in the logo/station matching loop (`size() - 1`): the last received station is never checked | Loop fixed |
 | **DAB logos discarded** | Only perfectly square `logo_unrestricted` logos are accepted | Rectangular logos are accepted too and made square (uniform borders cropped, or centred) |
 | **No DAB+ images on the home screen** | The slideshow only goes to the radio app | Slideshow images are also sent to the home screen |
+| **Radio service crashing at every start-up** (v1.2) | A DAB reminder saved without a time makes the service fail at every start-up, because it stays saved. On older firmware the whole infotainment restarts | Reminders without a valid time, or already past, are not scheduled and are deleted |
+| **Errors in worker threads closing the service** (v1.2) | An unexpected error in a background task (database, reminders…) closes the whole radio service, even with DAB playing | The error is logged and the service stays alive |
+| **Error at start-up when the tuner isn't ready** (v1.2) | With the tuner list still empty the service fails | Configuration is skipped and the service retries by itself |
 | **Waiting for the image at every station change** | No slideshow memory | The last image of each station is saved and shown immediately |
 | **Memory growing over time** | Slideshow, logos and station info pile up without limit | Last 4 images kept, lists de-duplicated and capped |
 
@@ -41,7 +45,7 @@ Fixes for the **original radio service** of the MG4 infotainment with the **SAIC
 
 | Firmware | Status |
 |---|---|
-| SAIC 1.0, SWI68-29958-1300**R69**, service `1.0.0_EH32_SOP_2502201114` | ✅ [Ready-made APK in Releases](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest), **tested on MG4 Luxury** (Comfort, Trophy and XPower not tested yet) |
+| SAIC 1.0, SWI68-29958-1300**R69** and **R73**, service `1.0.0_EH32_SOP_2502201114` | ✅ [Ready-made APK in Releases](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest), **tested on MG4 Luxury** (Comfort, Trophy and XPower not tested yet) |
 | SAIC 1.0, other releases (R59, R63, R67, R71…) | ⚠️ **Do not use the ready-made APK.** Use the **build script** on your own APK: it checks by itself whether the code is compatible |
 | EH32 LL (`com.saicmotor.radio`) | ❌ Different firmware → [MG4-Radio-DABplus-Fix](https://github.com/Skittle6938/MG4-Radio-DABplus-Fix) |
 | Color Radio | ❌ Not supported |
@@ -77,14 +81,14 @@ In practice:
 ### Before you start: check the version
 
 The ready-made APK is built **only** for radio service **`1.0.0_EH32_SOP_2502201114`**, found on
-infotainment **SWI68-29958-1300R69** (you can see it in the car's system information), and it has been
+infotainment **SWI68-29958-1300R69** and **R73** (you can see it in the car's system information), and it has been
 tested on an **MG4 Luxury**.
-**If your version is not R69, do not install it**: the radio may stop working.
+**If your version is not R69 or R73, do not install it**: the radio may stop working.
 Build the APK for your version instead (see [below](#building-the-apk-for-your-version)).
 
 ### Option A — From a USB stick (recommended)
 
-1. Download **[RadioService_radiofix2_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** from the **Assets** section of the latest release.
+1. Download **[RadioService_radiofix3_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** from the **Assets** section of the latest release.
 2. Copy it to a USB stick formatted as **FAT32** or **exFAT** (the root folder is fine).
 3. With the car on, plug the stick into the USB port.
 4. Open the infotainment **file manager** and go to the USB stick.
@@ -101,7 +105,7 @@ Build the APK for your version instead (see [below](#building-the-apk-for-your-v
 You need ADB enabled on the unit (for the MG4: [ADB_util by Leon Kerman, XDA thread](https://xdaforums.com/t/mg4-electric-aaos-9-playing-and-possibly-other-mg-models.4697712/post-90591053)).
 
 ```bash
-adb install -r RadioService_radiofix2_1.0.0_EH32_SOP_2502201114.apk
+adb install -r RadioService_radiofix3_1.0.0_EH32_SOP_2502201114.apk
 adb reboot
 ```
 
@@ -118,12 +122,12 @@ adb shell dumpsys package com.saicmotor.service.radio | grep versionName
 | **"App not installed"** or **"conflicts with an existing package"** | Your car's radio service is signed with a different key or is from a different firmware (e.g. LL or Color Radio). This APK is not for your car. |
 | The file manager **won't open** APKs | On some versions installing from the file manager is blocked: use Option B. |
 | **Nothing changes** after installing | You didn't restart the unit (step 6). |
-| **The radio stops working** after installing | Your version is probably not R69. Remove the patch: see [Going back to the original](#going-back-to-the-original). |
+| **The radio stops working** after installing | Your version is probably not R69 or R73. Remove the patch: see [Going back to the original](#going-back-to-the-original). |
 | The FM list is **empty or incomplete** | Run a new FM scan from the Radio app (step 7). |
 
 ### Going back to the original
 
-You also need this if you installed the APK on the wrong version (not R69) and the radio no longer works.
+You also need this if you installed the APK on the wrong version (not R69 or R73) and the radio no longer works.
 The factory original is still intact in `/system`: you just need to remove the update and restart.
 
 **1. From Settings (no computer):** car Settings → app list → show system apps → radio service

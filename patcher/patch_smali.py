@@ -133,4 +133,37 @@ patch('RadioService.smali',
       '    invoke-static {p0}, ' + FIX + '->scheduleBootResume(Lcom/saicmotor/service/radio/RadioService;)V\n\n'
       '    .line 191\n'
       '    return-void\n')
+# 8) stabilita' (radiofix3)
+# 8a) rete di sicurezza per i thread di lavoro, installata il prima possibile
+patch('RadioServiceApp.smali',
+      '.method public onCreate()V\n    .locals 0\n\n    .line 18\n'
+      '    invoke-super {p0}, Landroid/app/Application;->onCreate()V\n',
+      '.method public onCreate()V\n    .locals 0\n\n    .line 18\n'
+      '    invoke-super {p0}, Landroid/app/Application;->onCreate()V\n\n'
+      '    invoke-static {}, ' + FIX + '->installCrashGuard()V\n')
+# 8b) promemoria DAB senza ora valida: niente crash a ogni avvio
+patch('utils/ProgramAlarm.smali',
+      '.method public setProgramReminder(Landroid/content/Context;Lcom/saicmotor/sdk/radio/bean/DabSubRadioBean;)V\n'
+      '    .locals 4\n'
+      '    .param p1, "context"    # Landroid/content/Context;\n'
+      '    .param p2, "dabBean"    # Lcom/saicmotor/sdk/radio/bean/DabSubRadioBean;\n',
+      '.method public setProgramReminder(Landroid/content/Context;Lcom/saicmotor/sdk/radio/bean/DabSubRadioBean;)V\n'
+      '    .locals 4\n'
+      '    .param p1, "context"    # Landroid/content/Context;\n'
+      '    .param p2, "dabBean"    # Lcom/saicmotor/sdk/radio/bean/DabSubRadioBean;\n\n'
+      '    invoke-static {p2}, ' + FIX + '->checkReminder(Lcom/saicmotor/sdk/radio/bean/DabSubRadioBean;)Z\n\n'
+      '    move-result v0\n\n'
+      '    if-nez v0, :radiofix_reminder_ok\n\n'
+      '    return-void\n\n'
+      '    :radiofix_reminder_ok\n')
+# 8c) lista moduli radio vuota: niente IndexOutOfBounds in initRadioConfig
+patch('platform/RadioManagerExt.smali',
+      '.method private initRadioConfig()V\n    .locals 8\n',
+      '.method private initRadioConfig()V\n    .locals 8\n\n'
+      '    iget-object v0, p0, Lcom/saicmotor/service/radio/platform/RadioManagerExt;->mModules:Ljava/util/List;\n\n'
+      '    invoke-static {v0}, ' + FIX + '->hasModules(Ljava/util/List;)Z\n\n'
+      '    move-result v0\n\n'
+      '    if-nez v0, :radiofix_modules_ok\n\n'
+      '    return-void\n\n'
+      '    :radiofix_modules_ok\n')
 print('tutti gli hook applicati')

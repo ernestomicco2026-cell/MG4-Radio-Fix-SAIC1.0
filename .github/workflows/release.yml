@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FW_VERSION: 1.0.0_EH32_SOP_2502201114
-      FW_SWI: SWI68-29958-1300R69
+      FW_SWI: SWI68-29958-1300R69 e R73
     steps:
       - uses: actions/checkout@v5
 
@@ -60,7 +60,7 @@ jobs:
         id: notes
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          APK="RadioService_radiofix2_${FW_VERSION}.apk"
+          APK="RadioService_radiofix3_${FW_VERSION}.apk"
           SHA="$(sha256sum "dist/$APK" | cut -d' ' -f1)"
           echo "$SHA  $APK" > "dist/SHA256SUMS.txt"
           (cd dist && sha256sum RadioFixRemover_*.apk) >> "dist/SHA256SUMS.txt"
