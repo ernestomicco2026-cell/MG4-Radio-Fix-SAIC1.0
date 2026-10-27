@@ -13,7 +13,8 @@ Correzioni al **servizio radio originale** dell'MG4 con infotainment **SAIC 1.0*
 ## Cosa corregge
 
 - 📻 **FM bloccato su una stazione** — la lista stazioni non si riduce più a un'unica frequenza (es. resta sulla 90.90 e avanti/indietro non cambiano). Ora si aggiorna solo durante una vera ricerca.
-- 🛡️ **Stabilità** — *novità v1.2.* Un promemoria DAB salvato senza ora non fa più bloccare il servizio a ogni avvio (sui firmware più vecchi riavviava tutto l'infotainment). Un errore in un'operazione in background non chiude più il servizio radio. Niente errore all'avvio se il sintonizzatore non è ancora pronto.
+- 📻 **Lista FM protetta e ricerca FM** — *novità v1.3.* La lista FM non si riduce più a una sola stazione quando il sintonizzatore fa una ricerca in sottofondo. Il comando "cerca" in FM ora fa davvero la ricerca FM (prima faceva sempre quella AM) e, se la lista FM è vuota o ha una sola stazione, la radio la rifà da sola.
+- 🛡️ **Stabilità** — Un promemoria DAB salvato senza ora non fa più bloccare il servizio a ogni avvio (sui firmware più vecchi riavviava tutto l'infotainment). Un errore in un'operazione in background non chiude più il servizio radio. Niente errore all'avvio se il sintonizzatore non è ancora pronto.
 - 📶 **Cambio frequenza automatico (AF)** — Quando il segnale cala e il sintonizzatore passa da solo a un'altra frequenza della stessa stazione, la radio ora la segue invece di restare sulla frequenza vecchia. Serve **AF attivo** nelle impostazioni della radio.
 - ▶️ **Ripresa all'accensione** — se stavi ascoltando la radio, quando riaccendi l'auto riparte da sola. Se l'avevi messa in pausa tu, o usavi un'altra sorgente (CarPlay, Bluetooth…), resta ferma.
 - 🖼️ **Loghi DAB** — corretto un errore del firmware che non abbinava mai il logo all'ultima stazione ricevuta. Ora vengono accettati anche i loghi rettangolari, resi quadrati senza deformarli.

@@ -40,7 +40,7 @@ public final class RadioFix {
     private static final int MAX_LOGO_ENTRIES = 200;
     private static final int ART_SIZE = 320;
     private static final long FOCUS_LOSS_WINDOW_MS = 4000;
-    private static final long SCAN_TIMEOUT_MS = 180000;
+    private static final long SCAN_TIMEOUT_MS = 90000;
     private static final long CACHE_MIN_INTERVAL_MS = 60000;
     /** Dopo un nostro tune/step i ProgramInfo in arrivo sono "eco" della sintonia, non un cambio AF. */
     private static final long TUNE_ECHO_WINDOW_MS = 5000;
@@ -53,6 +53,7 @@ public final class RadioFix {
     private static volatile long sLastFocusLoss = 0;
     private static volatile boolean sBootResumeDone = false;
     private static volatile long sLastTune = 0;
+    private static volatile boolean sAutoScanDone = false;
     private static volatile RadioService sService;
     private static final Map<String, Long> sLastCacheSave = new HashMap<String, Long>();
 
@@ -78,16 +79,109 @@ public final class RadioFix {
     }
 
     /** Chiamato quando la lista scansionata viene salvata (RadioService.amOrFmScanOver). */
-    public static void onScanOver() {
+    public static void onScanOver(RadioService svc) {
         if (sScanning) log("scan over");
         sScanning = false;
+        try {
+            guardList(svc, "mFmRadios", 2);
+            guardList(svc, "mAmRadios", 1);
+        } catch (Throwable t) {
+            warn("onScanOver", t);
+        }
+    }
+
+    /**
+     * A fine scansione il firmware SOSTITUISCE la lista salvata con quella appena raccolta.
+     * Se la nuova e' molto piu' corta (es. 1 stazione al posto di 29: scansione di sottofondo
+     * interrotta o solo l'eco della stazione in ascolto) la scartiamo e teniamo la vecchia.
+     */
+    @SuppressWarnings("rawtypes")
+    private static void guardList(RadioService svc, String field, int type) throws Exception {
+        Object o = field(svc, field);
+        if (!(o instanceof List)) return;
+        List found = (List) o;
+        int n = found.size();
+        if (n == 0) return;
+        List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(type).toList();
+        int old = stored == null ? 0 : stored.size();
+        boolean accept = old <= 1 || (n >= 3 && n * 3 >= old);
+        if (accept) {
+            log("scan list " + (type == 2 ? "FM" : "AM") + ": " + n + " stazioni (prima " + old + ")");
+        } else {
+            log("scan list " + (type == 2 ? "FM" : "AM") + " scartata: " + n + " stazioni contro " + old + " salvate");
+            found.clear();
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static void clearTemp(int type) {
+        try {
+            RadioService svc = sService;
+            if (svc == null) return;
+            Object o = field(svc, type == 2 ? "mFmRadios" : "mAmRadios");
+            if (o instanceof List) ((List) o).clear();
+        } catch (Throwable t) {
+            warn("clearTemp", t);
+        }
+    }
+
+    // ---------------------------------------------------------------- ricerca FM a comando / automatica
+
+    /**
+     * Inizio di RadioServiceOptions.scan (comando "cerca" via AIDL). Il firmware ignora la banda e
+     * fa sempre la ricerca AM. Con la banda FM facciamo la ricerca FM.
+     * @return true se gestito qui (il codice originale non viene eseguito).
+     */
+    public static boolean scanRequest(int radioType, boolean forward) {
+        try {
+            if (radioType != 2) return false;
+            return startFmScan("comando cerca", forward);
+        } catch (Throwable t) {
+            warn("scanRequest", t);
+            return false;
+        }
+    }
+
+    private static boolean startFmScan(final String why, final boolean forward) {
+        final RadioService svc = sService;
+        if (svc == null || svc.getAmFmRadioTuner() == null) return false;
+        log("ricerca FM: " + why);
+        IO.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    svc.getAmFmRadioTuner().scan(2, forward);
+                } catch (Throwable t) {
+                    warn("startFmScan", t);
+                }
+            }
+        });
+        return true;
+    }
+
+    /** Una volta per accensione: se la lista FM ha 0 o 1 stazioni e si ascolta l'FM, cerca da sola. */
+    private static void maybeAutoScan(RadioBean bean) {
+        try {
+            if (sAutoScanDone || sScanning || sService == null || bean == null || bean.getRadioType() != 2) return;
+            List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
+            int n = stored == null ? 0 : stored.size();
+            if (n > 1) return;
+            sAutoScanDone = true;
+            log("lista FM con " + n + " stazioni: ricerca automatica tra 8 s");
+            MAIN.postDelayed(new Runnable() {
+                @Override public void run() {
+                    if (!sScanning) startFmScan("lista FM vuota", true);
+                }
+            }, 8000);
+        } catch (Throwable t) {
+            warn("maybeAutoScan", t);
+        }
     }
 
     /**
      * Il firmware originale aggiunge alla lista stazioni ogni ProgramInfo ricevuto, anche fuori
      * dalla scansione (es. dopo un seek): 3 s dopo la lista salvata viene SOSTITUITA da quell'unica
      * stazione e avanti/indietro restano bloccati su di essa. Qui accettiamo i risultati solo
-     * durante una scansione (o se la lista e' vuota).
+     * durante una scansione.
      *
      * Fuori dalla scansione un ProgramInfo FM con una frequenza diversa da quella in ascolto, che
      * non sia l'eco di un nostro tune, e' il sintonizzatore che ha cambiato frequenza da solo
@@ -100,18 +194,20 @@ public final class RadioFix {
             if (info == null) return false;
             long value = info.getSelector().getPrimaryId().getValue();
             int type = info.getSelector().getProgramType();
-            if (value == 0) { // marcatore di inizio scansione inviato dall'HAL
+            if (value == 0) {
+                // Marcatore di inizio scansione dell'HAL (anche per le ricerche di sottofondo).
+                // Il firmware qui CANCELLA la lista salvata: non lo facciamo, svuotiamo solo la
+                // lista temporanea. La lista salvata viene sostituita a fine scansione, se sensata.
                 onScanStart();
-                return true;
+                clearTemp(type);
+                return false;
             }
             if (sScanning && System.currentTimeMillis() - sScanStart > SCAN_TIMEOUT_MS) {
                 sScanning = false;
             }
             if (sScanning) return true;
-            if (type == 1 || type == 2) {
-                List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(type).toList();
-                if (stored == null || stored.isEmpty()) return true;
-            }
+            // fuori dalla scansione non si aggiunge nulla alla lista (nemmeno se e' vuota:
+            // diventerebbe una lista di una sola stazione). Se e' vuota parte la ricerca automatica.
             if (type == 2) followAf(info);
             else log("ignored program info outside scan: " + value + " type " + type);
             return false;
@@ -449,6 +545,7 @@ public final class RadioFix {
     public static void onProgram(RadioService svc, RadioBean bean) {
         try {
             if (bean == null) return;
+            maybeAutoScan(bean);
             int st = bean.getRadioState();
             boolean focusLoss = System.currentTimeMillis() - sLastFocusLoss < FOCUS_LOSS_WINDOW_MS;
             SharedPreferences p = prefs(svc);

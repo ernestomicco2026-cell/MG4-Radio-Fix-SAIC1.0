@@ -49,7 +49,7 @@ patch('platform/RadioTunerExt.smali',
 patch('RadioService.smali',
       '.method private amOrFmScanOver()V\n    .locals 3\n',
       '.method private amOrFmScanOver()V\n    .locals 3\n\n'
-      '    invoke-static {}, ' + FIX + '->onScanOver()V\n')
+      '    invoke-static {p0}, ' + FIX + '->onScanOver(Lcom/saicmotor/service/radio/RadioService;)V\n')
 
 # 2) DAB loghi: errore "size() - 1" nel ciclo di onDabServiceLogoChanged
 patch('RadioService$7.smali',
@@ -166,4 +166,21 @@ patch('platform/RadioManagerExt.smali',
       '    if-nez v0, :radiofix_modules_ok\n\n'
       '    return-void\n\n'
       '    :radiofix_modules_ok\n')
+# 9) ricerca FM (radiofix4): il comando "cerca" del firmware fa sempre la ricerca AM
+patch('options/RadioServiceOptions.smali',
+      '.method public scan(IZLcom/saicmotor/sdk/radio/ITuneCallback;)V\n    .locals 2\n'
+      '    .param p1, "radioType"    # I\n    .param p2, "forward"    # Z\n'
+      '    .param p3, "callback"    # Lcom/saicmotor/sdk/radio/ITuneCallback;\n'
+      '    .annotation system Ldalvik/annotation/Throws;\n        value = {\n'
+      '            Landroid/os/RemoteException;\n        }\n    .end annotation\n',
+      '.method public scan(IZLcom/saicmotor/sdk/radio/ITuneCallback;)V\n    .locals 2\n'
+      '    .param p1, "radioType"    # I\n    .param p2, "forward"    # Z\n'
+      '    .param p3, "callback"    # Lcom/saicmotor/sdk/radio/ITuneCallback;\n'
+      '    .annotation system Ldalvik/annotation/Throws;\n        value = {\n'
+      '            Landroid/os/RemoteException;\n        }\n    .end annotation\n\n'
+      '    invoke-static {p1, p2}, ' + FIX + '->scanRequest(IZ)Z\n\n'
+      '    move-result v0\n\n'
+      '    if-eqz v0, :radiofix_scan_orig\n\n'
+      '    return-void\n\n'
+      '    :radiofix_scan_orig\n')
 print('tutti gli hook applicati')

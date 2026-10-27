@@ -32,6 +32,8 @@ Fixes for the **original radio service** of the MG4 infotainment with the **SAIC
 | **DAB logos not showing** | Bug in the logo/station matching loop (`size() - 1`): the last received station is never checked | Loop fixed |
 | **DAB logos discarded** | Only perfectly square `logo_unrestricted` logos are accepted | Rectangular logos are accepted too and made square (uniform borders cropped, or centred) |
 | **No DAB+ images on the home screen** | The slideshow only goes to the radio app | Slideshow images are also sent to the home screen |
+| **FM list reduced to a single station** (v1.3) | When the tuner starts a background search, the firmware deletes the whole FM list; if the search finds nothing, only the current station is left | The saved list is no longer deleted: at the end of a search it is replaced only if the new one makes sense (not 1 station instead of 29) |
+| **FM search not starting** (v1.3) | The service's "search" command ignores the band and always runs an AM search | With the FM band an FM search starts. If the FM list has 0 or 1 stations, the radio runs a full search by itself (once per start-up) |
 | **Radio service crashing at every start-up** (v1.2) | A DAB reminder saved without a time makes the service fail at every start-up, because it stays saved. On older firmware the whole infotainment restarts | Reminders without a valid time, or already past, are not scheduled and are deleted |
 | **Errors in worker threads closing the service** (v1.2) | An unexpected error in a background task (database, reminders…) closes the whole radio service, even with DAB playing | The error is logged and the service stays alive |
 | **Error at start-up when the tuner isn't ready** (v1.2) | With the tuner list still empty the service fails | Configuration is skipped and the service retries by itself |
@@ -90,7 +92,7 @@ Build the APK for your version instead (see [below](#building-the-apk-for-your-v
 
 ### Option A — From a USB stick (recommended)
 
-1. Download **[RadioService_radiofix3_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** from the **Assets** section of the latest release.
+1. Download **[RadioService_radiofix4_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** from the **Assets** section of the latest release.
 2. Copy it to a USB stick formatted as **FAT32** or **exFAT** (the root folder is fine).
 3. With the car on, plug the stick into the USB port.
 4. Open the infotainment **file manager** and go to the USB stick.
@@ -107,7 +109,7 @@ Build the APK for your version instead (see [below](#building-the-apk-for-your-v
 You need ADB enabled on the unit (for the MG4: [ADB_util by Leon Kerman, XDA thread](https://xdaforums.com/t/mg4-electric-aaos-9-playing-and-possibly-other-mg-models.4697712/post-90591053)).
 
 ```bash
-adb install -r RadioService_radiofix3_1.0.0_EH32_SOP_2502201114.apk
+adb install -r RadioService_radiofix4_1.0.0_EH32_SOP_2502201114.apk
 adb reboot
 ```
 
@@ -199,7 +201,7 @@ adb logcat -s RadioFix
 ```
 
 Typical messages: `scan start` / `scan over` (FM scan), `ignored program info outside scan`
-(a station that would previously have "locked" the list), `AF follow` (frequency change followed), `auto resume`, `restored art`.
+(a station that would previously have "locked" the list), `scan list FM … scartata` (list too short, not saved), `ricerca FM` (FM search), `AF follow` (frequency change followed), `auto resume`, `restored art`.
 
 ---
 
