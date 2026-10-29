@@ -54,6 +54,8 @@ public final class RadioFix {
     private static volatile boolean sBootResumeDone = false;
     private static volatile long sLastTune = 0;
     private static volatile boolean sAutoScanDone = false;
+    private static final Map<Integer, Long> sLastNamed = new HashMap<Integer, Long>();
+    private static final long RENAME_MIN_INTERVAL_MS = 30 * 60 * 1000L;
     private static volatile RadioService sService;
     private static final Map<String, Long> sLastCacheSave = new HashMap<String, Long>();
 
@@ -208,12 +210,129 @@ public final class RadioFix {
             if (sScanning) return true;
             // fuori dalla scansione non si aggiunge nulla alla lista (nemmeno se e' vuota:
             // diventerebbe una lista di una sola stazione). Se e' vuota parte la ricerca automatica.
-            if (type == 2) followAf(info);
+            if (type == 2) {
+                String ps = psOf(info);
+                if (ps != null) nameStation(khz(value), ps, info);
+                followAf(info);
+            }
             else log("ignored program info outside scan: " + value + " type " + type);
             return false;
         } catch (Throwable t) {
             warn("shouldCollect", t);
             return true;
+        }
+    }
+
+    // ---------------------------------------------------------------- FM: nomi RDS nella lista
+
+    private static int khz(long v) {
+        return (int) (v < 87500 ? v * 10 : v);
+    }
+
+    private static String psOf(RadioManager.ProgramInfo info) {
+        try {
+            android.hardware.radio.RadioMetadata m = info == null ? null : info.getMetadata();
+            String ps = m == null ? null : m.getString("android.hardware.radio.metadata.RDS_PS");
+            if (ps == null) return null;
+            ps = ps.trim();
+            return ps.isEmpty() ? null : ps;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * Inizio di RadioService$6.onRdsMainInfoChanged (nome RDS della stazione in ascolto).
+     * Il firmware mette il nome sulla stazione corrente, ma subito dopo l'osservatore la
+     * sostituisce con la voce della lista: se la voce non ha nome si vede solo la frequenza.
+     * Qui scriviamo il nome anche nella voce della lista.
+     */
+    public static void onRdsMain(Object mainInfo) {
+        try {
+            if (mainInfo == null) return;
+            Object f = mainInfo.getClass().getMethod("getFrequency").invoke(mainInfo);
+            Object psRaw = mainInfo.getClass().getMethod("getPsName").invoke(mainInfo);
+            if (!(f instanceof Number) || psRaw == null) return;
+            String ps = psRaw instanceof char[] ? new String((char[]) psRaw) : String.valueOf(psRaw);
+            ps = ps.replace('\u0000', ' ').trim();
+            if (ps.isEmpty() || "null".equals(ps)) return;
+            long v = ((Number) f).longValue();
+            int k = (int) (v < 20000 ? v * 10 : v); // l'HAL usa unita' da 10 kHz
+            nameStation(k, ps, null);
+        } catch (Throwable t) {
+            warn("onRdsMain", t);
+        }
+    }
+
+    /**
+     * Scrive il nome RDS nella voce della lista FM con quella frequenza (se c'e': la lista non
+     * si allunga). Un nome gia' presente si aggiorna al massimo ogni 30 minuti, perche' alcune
+     * stazioni cambiano il nome di continuo e ogni aggiornamento riscrive la lista salvata.
+     */
+    private static void nameStation(int k, String ps, RadioManager.ProgramInfo source) {
+        try {
+            if (sScanning) return;
+            List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
+            if (stored == null || stored.isEmpty()) return;
+            int idx = -1;
+            for (int i = 0; i < stored.size(); i++) {
+                if (khz(stored.get(i).getSelector().getPrimaryId().getValue()) == k) { idx = i; break; }
+            }
+            if (idx < 0) return;
+            RadioManager.ProgramInfo entry = stored.get(idx);
+            String old = psOf(entry);
+            if (ps.equals(old)) return;
+            long now = System.currentTimeMillis();
+            synchronized (sLastNamed) {
+                Long last = sLastNamed.get(k);
+                if (old != null && last != null && now - last < RENAME_MIN_INTERVAL_MS) return;
+                sLastNamed.put(k, now);
+            }
+            RadioManager.ProgramInfo named = source != null ? source : withName(entry, ps);
+            if (named == null) return;
+            List<RadioManager.ProgramInfo> merged = new java.util.ArrayList<RadioManager.ProgramInfo>(stored);
+            merged.set(idx, named);
+            RadioStorage.getInstance().addAmFmRadio(merged, 2);
+            log("RDS nome " + k + ": " + (old == null ? "-" : old) + " -> " + ps);
+        } catch (Throwable t) {
+            warn("nameStation", t);
+        }
+    }
+
+    /** Copia della voce con il nome RDS nei metadati (costruttore nascosto: riflessione). */
+    private static RadioManager.ProgramInfo withName(RadioManager.ProgramInfo e, String ps) {
+        java.lang.reflect.Constructor<RadioManager.ProgramInfo> c;
+        android.hardware.radio.RadioMetadata meta;
+        try {
+            c = RadioManager.ProgramInfo.class.getConstructor(
+                    android.hardware.radio.ProgramSelector.class,
+                    android.hardware.radio.ProgramSelector.Identifier.class,
+                    android.hardware.radio.ProgramSelector.Identifier.class,
+                    java.util.Collection.class, int.class, int.class,
+                    android.hardware.radio.RadioMetadata.class, Map.class);
+            android.hardware.radio.RadioMetadata.Builder b;
+            try {
+                android.hardware.radio.RadioMetadata m = e.getMetadata();
+                b = m != null ? new android.hardware.radio.RadioMetadata.Builder(m)
+                              : new android.hardware.radio.RadioMetadata.Builder();
+            } catch (Throwable t) {
+                b = new android.hardware.radio.RadioMetadata.Builder();
+            }
+            meta = b.putString("android.hardware.radio.metadata.RDS_PS", ps).build();
+        } catch (Throwable t) {
+            warn("withName", t);
+            return null;
+        }
+        try {
+            return c.newInstance(e.getSelector(), e.getLogicallyTunedTo(), e.getPhysicallyTunedTo(),
+                    e.getRelatedContent(), 0, e.getSignalStrength(), meta, e.getVendorInfo());
+        } catch (Throwable t) {
+            try { // come fa il firmware in AmFmRadioOptions.addCollection
+                return c.newInstance(e.getSelector(), null, null, null, 0, 0, meta, null);
+            } catch (Throwable t2) {
+                warn("withName", t2);
+                return null;
+            }
         }
     }
 

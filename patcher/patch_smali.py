@@ -183,4 +183,13 @@ patch('options/RadioServiceOptions.smali',
       '    if-eqz v0, :radiofix_scan_orig\n\n'
       '    return-void\n\n'
       '    :radiofix_scan_orig\n')
+# 10) nomi RDS (radiofix5): il nome della stazione in ascolto va anche nella voce della lista
+patch('RadioService$6.smali',
+      '.method public onRdsMainInfoChanged(Landroid/hardware/radio/RadioRdsInfo$MainInfo;)V\n'
+      '    .locals 5\n'
+      '    .param p1, "mainInfo"    # Landroid/hardware/radio/RadioRdsInfo$MainInfo;\n',
+      '.method public onRdsMainInfoChanged(Landroid/hardware/radio/RadioRdsInfo$MainInfo;)V\n'
+      '    .locals 5\n'
+      '    .param p1, "mainInfo"    # Landroid/hardware/radio/RadioRdsInfo$MainInfo;\n\n'
+      '    invoke-static {p1}, ' + FIX + '->onRdsMain(Ljava/lang/Object;)V\n')
 print('tutti gli hook applicati')

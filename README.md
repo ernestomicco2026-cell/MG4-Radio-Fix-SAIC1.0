@@ -32,6 +32,7 @@ Correzioni al **servizio radio originale** dell'infotainment MG4 con sistema **S
 | **Loghi DAB che non compaiono** | Errore nel ciclo di abbinamento logo/stazione (`size() - 1`): l'ultima stazione ricevuta non viene mai controllata | Ciclo corretto |
 | **Loghi DAB scartati** | Accettati solo loghi `logo_unrestricted` perfettamente quadrati | Accettati anche quelli rettangolari, resi quadrati (ritaglio delle bande uniformi o centratura) |
 | **Nessuna immagine DAB+ sulla schermata home** | Lo slideshow va solo all'app radio | Le immagini dello slideshow vengono mandate anche alla home |
+| **Nomi RDS che non compaiono** (v1.4) | Il nome RDS arriva sulla stazione in ascolto, ma subito dopo il servizio la sostituisce con la voce della lista: se la voce è senza nome (es. dopo una ricerca) si vede solo la frequenza | Il nome RDS viene scritto anche nella voce della lista, che così mostra il nome della stazione |
 | **Lista FM ridotta a una sola stazione** (v1.3) | Quando il sintonizzatore avvia una ricerca in sottofondo il firmware cancella tutta la lista FM; se la ricerca non porta risultati resta solo la stazione in ascolto | La lista salvata non viene più cancellata: a fine ricerca viene sostituita solo se la nuova è sensata (non 1 stazione al posto di 29) |
 | **Ricerca FM che non parte** (v1.3) | Il comando "cerca" del servizio ignora la banda e fa sempre la ricerca AM | Con la banda FM parte la ricerca FM. Se la lista FM ha 0 o 1 stazioni, la radio fa da sola una ricerca completa (una volta per accensione) |
 | **Servizio radio che si blocca a ogni avvio** (v1.2) | Un promemoria DAB salvato senza ora fa andare in errore il servizio a ogni avvio, perché resta salvato. Sui firmware più vecchi si riavvia tutto l'infotainment | I promemoria senza ora valida o già passati non vengono programmati e vengono cancellati |
@@ -92,7 +93,7 @@ Costruisci invece l'APK per la tua versione (vedi [sotto](#costruire-lapk-per-la
 
 ### Opzione A — Da chiavetta USB (consigliata)
 
-1. Scarica **[RadioService_radiofix4_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** dalla sezione **Assets** dell'ultima release.
+1. Scarica **[RadioService_radiofix5_1.0.0_EH32_SOP_2502201114.apk](https://github.com/ernestomicco2026-cell/MG4-Radio-Fix-SAIC1.0/releases/latest)** dalla sezione **Assets** dell'ultima release.
 2. Copialo su una chiavetta USB formattata **FAT32** o **exFAT** (anche nella cartella principale va bene).
 3. Con l'auto accesa, inserisci la chiavetta nella porta USB.
 4. Apri il **gestore file** dell'infotainment e vai sulla chiavetta.
@@ -109,7 +110,7 @@ Costruisci invece l'APK per la tua versione (vedi [sotto](#costruire-lapk-per-la
 Serve ADB attivo sull'unità (per l'MG4: [ADB_util di Leon Kerman, thread XDA](https://xdaforums.com/t/mg4-electric-aaos-9-playing-and-possibly-other-mg-models.4697712/post-90591053)).
 
 ```bash
-adb install -r RadioService_radiofix4_1.0.0_EH32_SOP_2502201114.apk
+adb install -r RadioService_radiofix5_1.0.0_EH32_SOP_2502201114.apk
 adb reboot
 ```
 
