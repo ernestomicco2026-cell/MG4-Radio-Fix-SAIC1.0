@@ -13,8 +13,7 @@ Correzioni al **servizio radio originale** dell'MG4 con infotainment **SAIC 1.0*
 ## Cosa corregge
 
 - 📻 **FM bloccato su una stazione** — la lista stazioni non si riduce più a un'unica frequenza (es. resta sulla 90.90 e avanti/indietro non cambiano). Ora si aggiorna solo durante una vera ricerca.
-- ⚙️ **App Radio e impostazioni** — *novità v1.5.* Dopo "cerca" / "aggiorna lista" l'app Radio non resta più bloccata, e dopo una ricerca FM la radio torna sulla stazione di prima. Gli interruttori delle impostazioni (annuncio traffico, frequenza alternativa…) non tornano più indietro, e dopo ogni ricerca la configurazione RDS viene riapplicata.
-- 🏷️ **Nomi RDS delle stazioni** — Il nome RDS della stazione in ascolto viene salvato anche nella lista: non si vede più solo la frequenza dopo una ricerca.
+- 🏷️ **Nomi RDS delle stazioni** — *novità v1.4.* Il nome RDS della stazione in ascolto viene salvato anche nella lista: non si vede più solo la frequenza dopo una ricerca.
 - 📻 **Lista FM protetta e ricerca FM** — La lista FM non si riduce più a una sola stazione quando il sintonizzatore fa una ricerca in sottofondo. Il comando "cerca" in FM ora fa davvero la ricerca FM (prima faceva sempre quella AM) e, se la lista FM è vuota o ha una sola stazione, la radio la rifà da sola.
 - 🛡️ **Stabilità** — Un promemoria DAB salvato senza ora non fa più bloccare il servizio a ogni avvio (sui firmware più vecchi riavviava tutto l'infotainment). Un errore in un'operazione in background non chiude più il servizio radio. Niente errore all'avvio se il sintonizzatore non è ancora pronto.
 - 📶 **Cambio frequenza automatico (AF)** — Quando il segnale cala e il sintonizzatore passa da solo a un'altra frequenza della stessa stazione, la radio ora la segue invece di restare sulla frequenza vecchia. Serve **AF attivo** nelle impostazioni della radio.
