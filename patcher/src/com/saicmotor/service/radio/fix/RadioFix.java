@@ -54,6 +54,23 @@ public final class RadioFix {
     private static volatile boolean sBootResumeDone = false;
     private static volatile long sLastTune = 0;
     private static volatile boolean sAutoScanDone = false;
+    private static volatile Object sPendingCb;
+    private static volatile int sPendingType;
+    private static volatile RadioBean sBeforeScan;
+    private static final long SEARCH_TIMEOUT_MS = 300000;
+    private static volatile boolean sOwnFmScan = false;
+    // verifica RDS dopo la ricerca
+    private static final long VERIFY_STEP_MAX_MS = 3000;
+    private static final long VERIFY_AFTER_PS_MS = 500;
+    private static final int VERIFY_MAX_STATIONS = 90;
+    private static volatile boolean sVerifying = false;
+    private static List<RadioManager.ProgramInfo> sVerifyList;
+    private static int sVerifyIdx;
+    private static volatile int sVerifyFreq;
+    private static int sVerifyUserFreq;
+    private static RadioBean sVerifyPrev;
+    private static RadioService sVerifySvc;
+    private static final Map<Integer, String> sVerifyNames = new HashMap<Integer, String>();
     private static final Map<Integer, Long> sLastNamed = new HashMap<Integer, Long>();
     private static final long RENAME_MIN_INTERVAL_MS = 30 * 60 * 1000L;
     private static volatile RadioService sService;
@@ -90,7 +107,338 @@ public final class RadioFix {
         } catch (Throwable t) {
             warn("onScanOver", t);
         }
+        if (sOwnFmScan) {
+            // ricerca FM partita da noi: prima di rispondere "finita" verifichiamo l'RDS
+            sOwnFmScan = false;
+            final RadioBean prev = sBeforeScan;
+            sBeforeScan = null;
+            final RadioService s1 = svc;
+            MAIN.postDelayed(new Runnable() {
+                @Override public void run() { startVerify(s1, prev, 0); }
+            }, 1500);
+            return;
+        }
+        // vale anche per le richieste DAB, per cui il firmware fa la ricerca AM
+        finishSearch(sPendingType, "fine ricerca");
+        if (sBeforeScan == null) {
+            final RadioService s2 = svc;
+            MAIN.postDelayed(new Runnable() {
+                @Override public void run() { if (!sScanning) reapplyRdsConfig(s2); }
+            }, 1500);
+        }
     }
+
+    /** Fine della ricerca DAB (RadioService.scanDabOver, chiamato a ogni lista DAB ricevuta). */
+    public static void onDabScanOver() {
+        if (sPendingType != 4) return;
+        final Object cb = sPendingCb;
+        MAIN.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (sPendingCb == cb) finishSearch(4, "lista DAB ricevuta");
+            }
+        }, 4000);
+    }
+
+    // ---------------------------------------------------------------- risposta "ricerca finita" all'app Radio
+
+    /**
+     * L'app Radio, quando chiede una ricerca, BLOCCA i tocchi (pulsanti, lista, impostazioni) finche'
+     * il servizio non chiama ITuneCallback.onFinished. Il firmware non la chiama mai: qui la chiamiamo
+     * a fine ricerca, o dopo SEARCH_TIMEOUT_MS se la ricerca non da' segni di vita.
+     */
+    private static void rememberSearch(final Object cb, int type) {
+        if (cb == null) return;
+        Object prev = sPendingCb;
+        if (prev != null && prev != cb) callFinished(prev, "sostituita da una nuova ricerca");
+        sPendingCb = cb;
+        sPendingType = type;
+        MAIN.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (sPendingCb == cb) {
+                    sPendingCb = null;
+                    callFinished(cb, "tempo scaduto");
+                }
+            }
+        }, SEARCH_TIMEOUT_MS);
+    }
+
+    private static void finishSearch(int type, String why) {
+        Object cb = sPendingCb;
+        if (cb == null || sPendingType != type) return;
+        sPendingCb = null;
+        callFinished(cb, why);
+    }
+
+    private static void callFinished(Object cb, String why) {
+        try {
+            ((com.saicmotor.sdk.radio.ITuneCallback) cb).onFinished(true);
+            log("ricerca finita (" + why + "): app Radio sbloccata");
+        } catch (Throwable t) {
+            warn("callFinished", t);
+        }
+    }
+
+    // ---------------------------------------------------------------- impostazioni RDS (AF, TA, regione...)
+
+    private static String cfgText(Object cfg) {
+        if (cfg == null) return "null";
+        StringBuilder b = new StringBuilder();
+        for (String g : new String[] {"getAF", "getTA", "getRegion", "getDist", "getServiceFollowing"}) {
+            try {
+                b.append(g.substring(3)).append('=').append(cfg.getClass().getMethod(g).invoke(cfg)).append(' ');
+            } catch (Throwable t) {
+                b.append(g.substring(3)).append("=? ");
+            }
+        }
+        return b.toString().trim();
+    }
+
+    private static final Runnable NOTIFY_CFG = new Runnable() {
+        @Override public void run() {
+            try {
+                RadioService svc = sService;
+                if (svc == null || svc.getAmFmRadioTuner() == null) return;
+                Object cfg = field(svc.getAmFmRadioTuner(), "rdsConfig");
+                if (cfg == null) return;
+                Object bean = Class.forName("com.saicmotor.service.radio.utils.RadioWrapper")
+                        .getMethod("rdsBox", Class.forName("android.hardware.radio.RadioManager$RdsConfig"))
+                        .invoke(null, cfg);
+                svc.notifyRdsConfig((com.saicmotor.sdk.radio.bean.RdsConfigBean) bean);
+                log("impostazioni RDS inviate all'app Radio: " + cfgText(cfg));
+            } catch (Throwable t) {
+                warn("notifyCfg", t);
+            }
+        }
+    };
+
+    /**
+     * Subito dopo RadioTuner.setRdsConfig (RadioTunerExt.getFmRdsConfig, chiamato da ogni modifica
+     * di AF/TA/regione/distanza/service following). L'app Radio allinea gli interruttori a quello
+     * che il sintonizzatore conferma: se la conferma non arriva o arriva vecchia, l'interruttore
+     * torna indietro. Qui, poco dopo, mandiamo all'app lo stato salvato dal servizio.
+     */
+    public static void onRdsConfigApplied(int result, Object cfg) {
+        try {
+            log("setRdsConfig -> " + result + " (" + cfgText(cfg) + ")");
+            MAIN.removeCallbacks(NOTIFY_CFG);
+            MAIN.postDelayed(NOTIFY_CFG, 1500);
+        } catch (Throwable t) {
+            warn("onRdsConfigApplied", t);
+        }
+    }
+
+    /** Inizio di RadioService$6.onRadioConfigChanged: solo log (cosa conferma il sintonizzatore). */
+    public static void onHalRdsConfig(Object cfg) {
+        log("sintonizzatore conferma impostazioni RDS: " + cfgText(cfg));
+    }
+
+    /** Dopo una ricerca: la ricerca puo' azzerare la configurazione RDS nel sintonizzatore. */
+    private static void reapplyRdsConfig(RadioService svc) {
+        try {
+            if (svc == null || svc.getAmFmRadioTuner() == null) return;
+            log("riapplico le impostazioni RDS dopo la ricerca");
+            svc.getAmFmRadioTuner().getFmRdsConfig();
+        } catch (Throwable t) {
+            warn("reapplyRdsConfig", t);
+        }
+    }
+
+    // ---------------------------------------------------------------- verifica RDS dopo la ricerca FM
+
+    /**
+     * La ricerca del sintonizzatore e' veloce: salva ogni frequenza con un po' di segnale (anche
+     * 88.70/88.75/88.80 della stessa stazione) senza leggere l'RDS. Come le autoradio, a radio muta
+     * passiamo su ogni frequenza trovata, aspettiamo il nome RDS (max 3 s) e teniamo solo le
+     * stazioni con un nome, una per nome (quella con il segnale migliore).
+     */
+    private static void startVerify(final RadioService svc, final RadioBean prev, final int tries) {
+        try {
+            if (svc == null || svc.getAmFmRadioTuner() == null) { endSearch(svc, prev); return; }
+            if (sScanning) { // il sintonizzatore sta ancora cercando: aspettiamo un po'
+                if (tries < 10) {
+                    MAIN.postDelayed(new Runnable() {
+                        @Override public void run() { startVerify(svc, prev, tries + 1); }
+                    }, 2000);
+                    return;
+                }
+            }
+            List<RadioManager.ProgramInfo> list = RadioStorage.getInstance().getValidRadios(2).toList();
+            RadioBean cur = svc.getCurrentRadioInfo();
+            if (list == null || list.size() <= 3 || cur == null || cur.getRadioType() != 2) {
+                log("verifica RDS saltata (" + (list == null ? 0 : list.size()) + " stazioni)");
+                endSearch(svc, prev);
+                return;
+            }
+            sVerifyList = new java.util.ArrayList<RadioManager.ProgramInfo>(list);
+            while (sVerifyList.size() > VERIFY_MAX_STATIONS) sVerifyList.remove(sVerifyList.size() - 1);
+            synchronized (sVerifyNames) { sVerifyNames.clear(); }
+            sVerifyIdx = 0;
+            sVerifyPrev = prev;
+            sVerifySvc = svc;
+            sVerifyUserFreq = cur.getFrequencyKhz();
+            sVerifying = true;
+            log("verifica RDS di " + sVerifyList.size() + " frequenze (audio muto)");
+            svc.getAmFmRadioTuner().setMuted(true);
+            verifyNext();
+        } catch (Throwable t) {
+            warn("startVerify", t);
+            sVerifying = false;
+            endSearch(svc, prev);
+        }
+    }
+
+    private static final Runnable VERIFY_TIMEOUT = new Runnable() {
+        @Override public void run() { verifyAdvance(); }
+    };
+
+    private static void verifyNext() {
+        try {
+            if (!sVerifying) return;
+            RadioService svc = sVerifySvc;
+            RadioBean cur = svc.getCurrentRadioInfo();
+            if (cur == null || cur.getRadioType() != 2 || cur.getFrequencyKhz() != sVerifyUserFreq) {
+                verifyAbort("stazione o banda cambiata durante la verifica");
+                return;
+            }
+            if (sVerifyIdx >= sVerifyList.size()) {
+                verifyEnd();
+                return;
+            }
+            int f = khz(sVerifyList.get(sVerifyIdx).getSelector().getPrimaryId().getValue());
+            sVerifyFreq = f;
+            svc.getAmFmRadioTuner().tune(com.saicmotor.service.radio.platform.ProgramSelectorExt.createAmFmSelector(f));
+            svc.getAmFmRadioTuner().setMuted(true);
+            MAIN.removeCallbacks(VERIFY_TIMEOUT);
+            MAIN.postDelayed(VERIFY_TIMEOUT, VERIFY_STEP_MAX_MS);
+        } catch (Throwable t) {
+            warn("verifyNext", t);
+            verifyAbort("errore");
+        }
+    }
+
+    private static void verifyAdvance() {
+        if (!sVerifying) return;
+        sVerifyIdx++;
+        verifyNext();
+    }
+
+    private static void verifyName(Object mainInfo) {
+        try {
+            Object f = mainInfo.getClass().getMethod("getFrequency").invoke(mainInfo);
+            Object psRaw = mainInfo.getClass().getMethod("getPsName").invoke(mainInfo);
+            if (!(f instanceof Number) || psRaw == null) return;
+            String ps = psRaw instanceof char[] ? new String((char[]) psRaw) : String.valueOf(psRaw);
+            long v = ((Number) f).longValue();
+            verifyGotName((int) (v < 20000 ? v * 10 : v), ps);
+        } catch (Throwable t) {
+            warn("verifyName", t);
+        }
+    }
+
+    private static void verifyGotName(int k, String ps) {
+        if (ps == null) return;
+        ps = ps.replace('\u0000', ' ').trim();
+        if (ps.isEmpty() || "null".equals(ps) || k != sVerifyFreq) return;
+        synchronized (sVerifyNames) {
+            if (sVerifyNames.containsKey(k)) return;
+            sVerifyNames.put(k, ps);
+        }
+        MAIN.removeCallbacks(VERIFY_TIMEOUT);
+        MAIN.postDelayed(VERIFY_TIMEOUT, VERIFY_AFTER_PS_MS);
+    }
+
+    private static int signal(RadioManager.ProgramInfo i) {
+        try { return i.getSignalStrength(); } catch (Throwable t) { return 0; }
+    }
+
+    private static void verifyEnd() {
+        sVerifying = false;
+        MAIN.removeCallbacks(VERIFY_TIMEOUT);
+        RadioService svc = sVerifySvc;
+        try {
+            Map<String, RadioManager.ProgramInfo> best = new java.util.LinkedHashMap<String, RadioManager.ProgramInfo>();
+            Map<String, String> shown = new HashMap<String, String>();
+            synchronized (sVerifyNames) {
+                for (RadioManager.ProgramInfo e : sVerifyList) {
+                    String ps = sVerifyNames.get(khz(e.getSelector().getPrimaryId().getValue()));
+                    if (ps == null) continue;
+                    String key = ps.toUpperCase().replace(" ", "");
+                    RadioManager.ProgramInfo old = best.get(key);
+                    if (old == null || signal(e) > signal(old)) {
+                        best.put(key, e);
+                        shown.put(key, ps);
+                    }
+                }
+            }
+            int n = best.size();
+            if (n >= 3) {
+                List<RadioManager.ProgramInfo> out = new java.util.ArrayList<RadioManager.ProgramInfo>();
+                for (Map.Entry<String, RadioManager.ProgramInfo> me : best.entrySet()) {
+                    RadioManager.ProgramInfo named = withName(me.getValue(), shown.get(me.getKey()));
+                    out.add(named != null ? named : me.getValue());
+                }
+                RadioStorage.getInstance().addAmFmRadio(out, 2);
+                log("verifica RDS finita: " + n + " stazioni con RDS su " + sVerifyList.size() + " frequenze");
+            } else {
+                log("verifica RDS: solo " + n + " stazioni con RDS, lista lasciata com'era");
+            }
+        } catch (Throwable t) {
+            warn("verifyEnd", t);
+        }
+        endSearch(svc, sVerifyPrev);
+    }
+
+    private static void verifyAbort(String why) {
+        if (!sVerifying) return;
+        sVerifying = false;
+        MAIN.removeCallbacks(VERIFY_TIMEOUT);
+        log("verifica RDS interrotta: " + why);
+        RadioService svc = sVerifySvc;
+        // l'utente ha scelto un'altra stazione o banda: non lo riportiamo indietro
+        try {
+            RadioBean cur = svc == null ? null : svc.getCurrentRadioInfo();
+            if (cur != null && cur.getRadioType() == 2 && svc.getAmFmRadioTuner() != null) {
+                svc.tune(2, cur.getFrequencyKhz());
+                if (cur.getRadioState() == 1) unmute(svc);
+            }
+        } catch (Throwable t) {
+            warn("verifyAbort", t);
+        }
+        finishSearch(2, "verifica interrotta");
+        reapplyRdsConfig(svc);
+    }
+
+    private static void unmute(RadioService svc) {
+        try {
+            if (svc.getAudioController() != null) svc.getAudioController().unMute();
+            else svc.getAmFmRadioTuner().setMuted(false);
+        } catch (Throwable t) {
+            warn("unmute", t);
+        }
+    }
+
+    /** Fine della ricerca FM partita da noi: torna sulla stazione di prima e sblocca l'app Radio. */
+    private static void endSearch(final RadioService svc, final RadioBean prev) {
+        try {
+            if (svc != null && svc.getAmFmRadioTuner() != null) {
+                RadioBean cur = svc.getCurrentRadioInfo();
+                if (prev != null) {
+                    log("dopo la ricerca torno su " + prev.getFrequencyKhz());
+                    svc.tune(2, prev.getFrequencyKhz());
+                    unmute(svc);
+                } else if (cur != null && cur.getRadioType() == 2) {
+                    // la radio non stava suonando: risintonizziamo in silenzio
+                    svc.getAmFmRadioTuner().tune(com.saicmotor.service.radio.platform.ProgramSelectorExt
+                            .createAmFmSelector(cur.getFrequencyKhz()));
+                }
+            }
+        } catch (Throwable t) {
+            warn("endSearch", t);
+        }
+        finishSearch(2, "fine ricerca FM");
+        reapplyRdsConfig(svc);
+    }
+
 
     /**
      * A fine scansione il firmware SOSTITUISCE la lista salvata con quella appena raccolta.
@@ -134,10 +482,15 @@ public final class RadioFix {
      * fa sempre la ricerca AM. Con la banda FM facciamo la ricerca FM.
      * @return true se gestito qui (il codice originale non viene eseguito).
      */
-    public static boolean scanRequest(int radioType, boolean forward) {
+    public static boolean scanRequest(int radioType, boolean forward, Object callback) {
         try {
+            // AM: ricerca AM originale. DAB: il firmware fa anche qui la ricerca AM (la funzione DAB
+            // esiste ma lascia l'audio in muto): non la cambiamo, ma la risposta "finita" arriva.
+            rememberSearch(callback, radioType);
             if (radioType != 2) return false;
-            return startFmScan("comando cerca", forward);
+            boolean ok = startFmScan("comando cerca", forward);
+            if (!ok) finishSearch(2, "sintonizzatore non pronto");
+            return ok;
         } catch (Throwable t) {
             warn("scanRequest", t);
             return false;
@@ -147,7 +500,35 @@ public final class RadioFix {
     private static boolean startFmScan(final String why, final boolean forward) {
         final RadioService svc = sService;
         if (svc == null || svc.getAmFmRadioTuner() == null) return false;
+        if (sVerifying) {
+            log("ricerca FM ignorata: verifica RDS in corso");
+            return true;
+        }
         log("ricerca FM: " + why);
+        sOwnFmScan = true;
+        try {
+            RadioBean cur = svc.getCurrentRadioInfo();
+            if (cur != null && cur.getRadioType() == 2 && cur.getRadioState() == 1) {
+                RadioBean copy = new RadioBean();
+                copy.setRadioType(2);
+                copy.setFrequencyKhz(cur.getFrequencyKhz());
+                copy.setRadioState(1);
+                sBeforeScan = copy;
+            }
+        } catch (Throwable t) {
+            warn("startFmScan prev", t);
+        }
+        MAIN.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (sOwnFmScan && !sScanning) { // la ricerca non ha dato risultati
+                    sOwnFmScan = false;
+                    RadioBean prev = sBeforeScan;
+                    sBeforeScan = null;
+                    log("ricerca FM senza risultati");
+                    endSearch(svc, prev);
+                }
+            }
+        }, 120000);
         IO.execute(new Runnable() {
             @Override public void run() {
                 try {
@@ -249,6 +630,10 @@ public final class RadioFix {
      */
     public static void onRdsMain(Object mainInfo) {
         try {
+            if (sVerifying) {
+                verifyName(mainInfo);
+                return;
+            }
             if (mainInfo == null) return;
             Object f = mainInfo.getClass().getMethod("getFrequency").invoke(mainInfo);
             Object psRaw = mainInfo.getClass().getMethod("getPsName").invoke(mainInfo);
@@ -272,6 +657,10 @@ public final class RadioFix {
     private static void nameStation(int k, String ps, RadioManager.ProgramInfo source) {
         try {
             if (sScanning) return;
+            if (sVerifying) {
+                verifyGotName(k, ps);
+                return;
+            }
             List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
             if (stored == null || stored.isEmpty()) return;
             int idx = -1;
