@@ -178,7 +178,7 @@ patch('options/RadioServiceOptions.smali',
       '    .param p3, "callback"    # Lcom/saicmotor/sdk/radio/ITuneCallback;\n'
       '    .annotation system Ldalvik/annotation/Throws;\n        value = {\n'
       '            Landroid/os/RemoteException;\n        }\n    .end annotation\n\n'
-      '    invoke-static {p1, p2}, ' + FIX + '->scanRequest(IZ)Z\n\n'
+      '    invoke-static {p1, p2, p3}, ' + FIX + '->scanRequest(IZLjava/lang/Object;)Z\n\n'
       '    move-result v0\n\n'
       '    if-eqz v0, :radiofix_scan_orig\n\n'
       '    return-void\n\n'
@@ -192,4 +192,27 @@ patch('RadioService$6.smali',
       '    .locals 5\n'
       '    .param p1, "mainInfo"    # Landroid/hardware/radio/RadioRdsInfo$MainInfo;\n\n'
       '    invoke-static {p1}, ' + FIX + '->onRdsMain(Ljava/lang/Object;)V\n')
+# 11) fine ricerca DAB: risposta "finita" all'app Radio (radiofix6)
+patch('RadioService.smali',
+      '.method private scanDabOver()V\n    .locals 4\n',
+      '.method private scanDabOver()V\n    .locals 4\n\n'
+      '    invoke-static {}, ' + FIX + '->onDabScanOver()V\n')
+# 12) impostazioni RDS (radiofix6): stato salvato rimandato all'app Radio + log della conferma
+patch('platform/RadioTunerExt.smali',
+      '    invoke-virtual {v0, v1}, Landroid/hardware/radio/RadioTuner;->setRdsConfig(Landroid/hardware/radio/RadioManager$RdsConfig;)I\n\n'
+      '    move-result v0\n\n'
+      '    .line 347\n',
+      '    invoke-virtual {v0, v1}, Landroid/hardware/radio/RadioTuner;->setRdsConfig(Landroid/hardware/radio/RadioManager$RdsConfig;)I\n\n'
+      '    move-result v0\n\n'
+      '    iget-object v1, p0, Lcom/saicmotor/service/radio/platform/RadioTunerExt;->rdsConfig:Landroid/hardware/radio/RadioManager$RdsConfig;\n\n'
+      '    invoke-static {v0, v1}, ' + FIX + '->onRdsConfigApplied(ILjava/lang/Object;)V\n\n'
+      '    .line 347\n')
+patch('RadioService$6.smali',
+      '.method public onRadioConfigChanged(Landroid/hardware/radio/RadioManager$RdsConfig;)V\n'
+      '    .locals 3\n'
+      '    .param p1, "config"    # Landroid/hardware/radio/RadioManager$RdsConfig;\n',
+      '.method public onRadioConfigChanged(Landroid/hardware/radio/RadioManager$RdsConfig;)V\n'
+      '    .locals 3\n'
+      '    .param p1, "config"    # Landroid/hardware/radio/RadioManager$RdsConfig;\n\n'
+      '    invoke-static {p1}, ' + FIX + '->onHalRdsConfig(Ljava/lang/Object;)V\n')
 print('tutti gli hook applicati')

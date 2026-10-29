@@ -73,7 +73,7 @@ echo "Pacchetto: $PKG   versione: $VER"
 # --------------------------------------------------------------- hook smali
 say "Applico le modifiche"
 python3 -I "$HERE/patch_smali.py" "$WORK/src"
-sed -i "s/^  versionName: .*/  versionName: ${VER}-radiofix5/" "$WORK/src/apktool.yml"
+sed -i "s/^  versionName: .*/  versionName: ${VER}-radiofix6/" "$WORK/src/apktool.yml"
 
 # --------------------------------------------------------------- codice RadioFix
 say "Compilo RadioFix"
@@ -96,7 +96,7 @@ mkdir -p "$WORK/z" && cp "$WORK/radiofix.dex" "$WORK/z/classes$N.dex"
 AFTER="$(unzip -Z1 "$WORK/out.apk" | grep -cE '^classes[0-9]*\.dex$')"
 [ "$AFTER" -eq $((BEFORE + 1)) ] || { echo "STOP: errore nell'aggiunta di classes$N.dex"; exit 1; }
 echo "Codice RadioFix aggiunto come classes$N.dex"
-OUT="$(pwd)/RadioService_radiofix5_${VER}.apk"
+OUT="$(pwd)/RadioService_radiofix6_${VER}.apk"
 cp "$WORK/out.apk" "$OUT"
 jarsigner -keystore "$T/platform.p12" -storetype PKCS12 -storepass android \
   -sigalg SHA256withRSA -digestalg SHA-256 "$OUT" platform >/dev/null 2>&1
