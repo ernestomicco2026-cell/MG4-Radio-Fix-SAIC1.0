@@ -60,7 +60,7 @@ public final class RadioFix {
     private static final long SEARCH_TIMEOUT_MS = 300000;
     private static volatile boolean sOwnFmScan = false;
     // verifica RDS dopo la ricerca
-    private static final long VERIFY_STEP_MAX_MS = 3000;
+    private static final long VERIFY_STEP_MAX_MS = 2500;
     private static final long VERIFY_AFTER_PS_MS = 500;
     private static final int VERIFY_MAX_STATIONS = 90;
     private static volatile boolean sVerifying = false;
@@ -101,22 +101,28 @@ public final class RadioFix {
     public static void onScanOver(RadioService svc) {
         if (sScanning) log("scan over");
         sScanning = false;
+        List<RadioManager.ProgramInfo> foundFm = takeTemp(svc, "mFmRadios");
         try {
-            guardList(svc, "mFmRadios", 2);
             guardList(svc, "mAmRadios", 1);
         } catch (Throwable t) {
             warn("onScanOver", t);
         }
         if (sOwnFmScan) {
-            // ricerca FM partita da noi: prima di rispondere "finita" verifichiamo l'RDS
+            // ricerca FM partita da noi: verifichiamo l'RDS delle frequenze trovate
             sOwnFmScan = false;
             final RadioBean prev = sBeforeScan;
             sBeforeScan = null;
             final RadioService s1 = svc;
+            final List<RadioManager.ProgramInfo> cand = foundFm;
+            log("ricerca FM: " + cand.size() + " frequenze trovate");
             MAIN.postDelayed(new Runnable() {
-                @Override public void run() { startVerify(s1, prev, 0); }
+                @Override public void run() { startVerify(s1, prev, cand, true, 0); }
             }, 1500);
             return;
+        }
+        if (!foundFm.isEmpty()) {
+            // ricerca di sottofondo del sintonizzatore: entrano solo le stazioni con nome RDS
+            storeNamed(foundFm, false, "ricerca di sottofondo (" + foundFm.size() + " frequenze)");
         }
         // vale anche per le richieste DAB, per cui il firmware fa la ricerca AM
         finishSearch(sPendingType, "fine ricerca");
@@ -251,24 +257,28 @@ public final class RadioFix {
      * passiamo su ogni frequenza trovata, aspettiamo il nome RDS (max 3 s) e teniamo solo le
      * stazioni con un nome, una per nome (quella con il segnale migliore).
      */
-    private static void startVerify(final RadioService svc, final RadioBean prev, final int tries) {
+    private static boolean sVerifyReplace;
+
+    private static void startVerify(final RadioService svc, final RadioBean prev,
+                                    final List<RadioManager.ProgramInfo> candidates, final boolean replace, final int tries) {
         try {
             if (svc == null || svc.getAmFmRadioTuner() == null) { endSearch(svc, prev); return; }
             if (sScanning) { // il sintonizzatore sta ancora cercando: aspettiamo un po'
                 if (tries < 10) {
                     MAIN.postDelayed(new Runnable() {
-                        @Override public void run() { startVerify(svc, prev, tries + 1); }
+                        @Override public void run() { startVerify(svc, prev, candidates, replace, tries + 1); }
                     }, 2000);
                     return;
                 }
             }
-            List<RadioManager.ProgramInfo> list = RadioStorage.getInstance().getValidRadios(2).toList();
+            List<RadioManager.ProgramInfo> list = candidates;
             RadioBean cur = svc.getCurrentRadioInfo();
-            if (list == null || list.size() <= 3 || cur == null || cur.getRadioType() != 2) {
+            if (list == null || list.isEmpty() || cur == null || cur.getRadioType() != 2) {
                 log("verifica RDS saltata (" + (list == null ? 0 : list.size()) + " stazioni)");
                 endSearch(svc, prev);
                 return;
             }
+            sVerifyReplace = replace;
             sVerifyList = new java.util.ArrayList<RadioManager.ProgramInfo>(list);
             while (sVerifyList.size() > VERIFY_MAX_STATIONS) sVerifyList.remove(sVerifyList.size() - 1);
             synchronized (sVerifyNames) { sVerifyNames.clear(); }
@@ -356,32 +366,18 @@ public final class RadioFix {
         MAIN.removeCallbacks(VERIFY_TIMEOUT);
         RadioService svc = sVerifySvc;
         try {
-            Map<String, RadioManager.ProgramInfo> best = new java.util.LinkedHashMap<String, RadioManager.ProgramInfo>();
-            Map<String, String> shown = new HashMap<String, String>();
+            List<RadioManager.ProgramInfo> named = new java.util.ArrayList<RadioManager.ProgramInfo>();
             synchronized (sVerifyNames) {
                 for (RadioManager.ProgramInfo e : sVerifyList) {
                     String ps = sVerifyNames.get(khz(e.getSelector().getPrimaryId().getValue()));
                     if (ps == null) continue;
-                    String key = ps.toUpperCase().replace(" ", "");
-                    RadioManager.ProgramInfo old = best.get(key);
-                    if (old == null || signal(e) > signal(old)) {
-                        best.put(key, e);
-                        shown.put(key, ps);
-                    }
+                    RadioManager.ProgramInfo n = withName(e, ps);
+                    named.add(n != null ? n : e);
                 }
             }
-            int n = best.size();
-            if (n >= 3) {
-                List<RadioManager.ProgramInfo> out = new java.util.ArrayList<RadioManager.ProgramInfo>();
-                for (Map.Entry<String, RadioManager.ProgramInfo> me : best.entrySet()) {
-                    RadioManager.ProgramInfo named = withName(me.getValue(), shown.get(me.getKey()));
-                    out.add(named != null ? named : me.getValue());
-                }
-                RadioStorage.getInstance().addAmFmRadio(out, 2);
-                log("verifica RDS finita: " + n + " stazioni con RDS su " + sVerifyList.size() + " frequenze");
-            } else {
-                log("verifica RDS: solo " + n + " stazioni con RDS, lista lasciata com'era");
-            }
+            log("verifica RDS finita: " + named.size() + " frequenze con RDS su " + sVerifyList.size());
+            // ricerca completa: la lista viene rifatta da zero, ma solo se l'RDS ha risposto
+            storeNamed(named, sVerifyReplace && !named.isEmpty(), "verifica RDS");
         } catch (Throwable t) {
             warn("verifyEnd", t);
         }
@@ -542,60 +538,27 @@ public final class RadioFix {
     }
 
     /**
-     * Lista FM gia' piena ma fatta soprattutto di frequenze senza nome (ricerca vecchia, senza
-     * verifica RDS): la verifichiamo da sole, senza nuova ricerca. Al massimo una volta al giorno se
-     * non riesce (la verifica tiene la radio muta per un paio di minuti).
+     * Una volta per accensione, alla prima stazione FM: dalla lista salvata si tolgono le frequenze
+     * senza nome RDS (senza verifiche a radio muta). Se la lista resta vuota (o con una stazione)
+     * parte una ricerca con verifica RDS, al massimo una volta al giorno.
      */
-    private static void maybeAutoVerify(final RadioBean bean, List<RadioManager.ProgramInfo> stored) {
-        int n = stored.size();
-        if (n < 10) return;
-        int named = 0;
-        for (RadioManager.ProgramInfo i : stored) if (psOf(i) != null) named++;
-        if (named * 2 >= n) return;
-        final RadioService svc = sService;
-        SharedPreferences p = prefs(svc);
-        long last = p.getLong("autoVerifyAt", 0);
-        long now = System.currentTimeMillis();
-        if (now - last < 24L * 3600 * 1000 && now >= last) return;
-        sAutoScanDone = true;
-        p.edit().putLong("autoVerifyAt", now).apply();
-        log("lista FM con " + n + " voci di cui solo " + named + " con nome: verifica RDS tra 10 s");
-        MAIN.postDelayed(new Runnable() {
-            @Override public void run() {
-                try {
-                    if (sScanning || sVerifying) return;
-                    RadioBean cur = svc.getCurrentRadioInfo();
-                    if (cur == null || cur.getRadioType() != 2) return;
-                    RadioBean prev = null;
-                    if (cur.getRadioState() == 1) {
-                        prev = new RadioBean();
-                        prev.setRadioType(2);
-                        prev.setFrequencyKhz(cur.getFrequencyKhz());
-                        prev.setRadioState(1);
-                    }
-                    startVerify(svc, prev, 0);
-                } catch (Throwable t) {
-                    warn("autoVerify", t);
-                }
-            }
-        }, 10000);
-    }
-
-    /** Una volta per accensione: se la lista FM ha 0 o 1 stazioni e si ascolta l'FM, cerca da sola. */
     private static void maybeAutoScan(RadioBean bean) {
         try {
-            if (sAutoScanDone || sScanning || sService == null || bean == null || bean.getRadioType() != 2) return;
+            if (sAutoScanDone || sScanning || sVerifying || sService == null || bean == null || bean.getRadioType() != 2) return;
+            sAutoScanDone = true;
+            storeNamed(null, false, "pulizia all'avvio");
             List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
             int n = stored == null ? 0 : stored.size();
-            if (n > 1) {
-                maybeAutoVerify(bean, stored);
-                return;
-            }
-            sAutoScanDone = true;
+            if (n > 1) return;
+            SharedPreferences p = prefs(sService);
+            long last = p.getLong("autoScanAt", 0);
+            long now = System.currentTimeMillis();
+            if (now >= last && now - last < 24L * 3600 * 1000) return;
+            p.edit().putLong("autoScanAt", now).apply();
             log("lista FM con " + n + " stazioni: ricerca automatica tra 8 s");
             MAIN.postDelayed(new Runnable() {
                 @Override public void run() {
-                    if (!sScanning) startFmScan("lista FM vuota", true);
+                    if (!sScanning && !sVerifying) startFmScan("lista FM vuota", true);
                 }
             }, 8000);
         } catch (Throwable t) {
@@ -704,30 +667,199 @@ public final class RadioFix {
                 verifyGotName(k, ps);
                 return;
             }
-            List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
-            if (stored == null || stored.isEmpty()) return;
-            int idx = -1;
-            for (int i = 0; i < stored.size(); i++) {
-                if (khz(stored.get(i).getSelector().getPrimaryId().getValue()) == k) { idx = i; break; }
+            if (k < 87500 || k > 108000) return;
+            RadioManager.ProgramInfo info = null;
+            if (source != null && ps.equals(psOf(source))) info = source;
+            if (info == null) {
+                List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
+                if (stored != null) {
+                    for (RadioManager.ProgramInfo e : stored) {
+                        if (khz(e.getSelector().getPrimaryId().getValue()) == k) { info = withName(e, ps); break; }
+                    }
+                }
             }
-            if (idx < 0) return;
-            RadioManager.ProgramInfo entry = stored.get(idx);
-            String old = psOf(entry);
-            if (ps.equals(old)) return;
-            long now = System.currentTimeMillis();
-            synchronized (sLastNamed) {
-                Long last = sLastNamed.get(k);
-                if (old != null && last != null && now - last < RENAME_MIN_INTERVAL_MS) return;
-                sLastNamed.put(k, now);
-            }
-            RadioManager.ProgramInfo named = source != null ? source : withName(entry, ps);
-            if (named == null) return;
-            List<RadioManager.ProgramInfo> merged = new java.util.ArrayList<RadioManager.ProgramInfo>(stored);
-            merged.set(idx, named);
-            RadioStorage.getInstance().addAmFmRadio(merged, 2);
-            log("RDS nome " + k + ": " + (old == null ? "-" : old) + " -> " + ps);
+            if (info == null) info = newInfo(k, ps);
+            if (info == null) return;
+            List<RadioManager.ProgramInfo> one = new java.util.ArrayList<RadioManager.ProgramInfo>();
+            one.add(info);
+            storeNamed(one, false, "RDS " + k + " " + ps);
         } catch (Throwable t) {
             warn("nameStation", t);
+        }
+    }
+
+    // ---------------------------------------------------------------- lista FM: solo stazioni RDS
+
+    private static String nameKey(String ps) {
+        return ps == null ? "" : ps.toUpperCase().replace(" ", "").replace(".", "");
+    }
+
+    /**
+     * Unica porta d'ingresso della lista FM salvata: ci entrano solo stazioni con nome RDS, una per
+     * frequenza e una per nome (se lo stesso nome e' su piu' frequenze resta quella con il segnale
+     * migliore; a parita' quella gia' in lista). Le voci senza nome gia' salvate vengono tolte.
+     * replace = true: la lista viene rifatta da zero con i candidati (ricerca completa).
+     */
+    private static synchronized void storeNamed(List<RadioManager.ProgramInfo> candidates, boolean replace, String why) {
+        try {
+            List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
+            if (stored == null) stored = new java.util.ArrayList<RadioManager.ProgramInfo>();
+            Map<Integer, RadioManager.ProgramInfo> byFreq = new java.util.LinkedHashMap<Integer, RadioManager.ProgramInfo>();
+            if (!replace) {
+                for (RadioManager.ProgramInfo e : stored) {
+                    if (psOf(e) != null) byFreq.put(khz(e.getSelector().getPrimaryId().getValue()), e);
+                }
+            }
+            long now = System.currentTimeMillis();
+            int added = 0;
+            if (candidates != null) {
+                for (RadioManager.ProgramInfo c : candidates) {
+                    String ps = psOf(c);
+                    if (ps == null) continue;
+                    int k = khz(c.getSelector().getPrimaryId().getValue());
+                    if (k < 87500 || k > 108000) continue;
+                    RadioManager.ProgramInfo old = byFreq.get(k);
+                    if (old != null) {
+                        String was = psOf(old);
+                        if (ps.equals(was)) continue;
+                        synchronized (sLastNamed) { // nomi che cambiano di continuo: max ogni 30 min
+                            Long last = sLastNamed.get(k);
+                            if (!replace && last != null && now - last < RENAME_MIN_INTERVAL_MS) continue;
+                            sLastNamed.put(k, now);
+                        }
+                    } else {
+                        added++;
+                    }
+                    byFreq.put(k, c);
+                }
+            }
+            // un solo canale per nome
+            Map<String, RadioManager.ProgramInfo> byName = new java.util.LinkedHashMap<String, RadioManager.ProgramInfo>();
+            for (RadioManager.ProgramInfo e : byFreq.values()) {
+                String key = nameKey(psOf(e));
+                RadioManager.ProgramInfo o = byName.get(key);
+                if (o == null || signal(e) > signal(o)) byName.put(key, e);
+            }
+            List<RadioManager.ProgramInfo> out = new java.util.ArrayList<RadioManager.ProgramInfo>(byName.values());
+            if (sameList(stored, out)) return;
+            if (out.isEmpty()) {
+                if (replace) return; // nessun nome trovato: non svuotiamo la lista
+                RadioStorage.getInstance().clearValidRadio(2);
+                log("lista FM: tolte " + stored.size() + " frequenze senza nome RDS (" + why + ")");
+                return;
+            }
+            RadioStorage.getInstance().addAmFmRadio(out, 2);
+            log("lista FM: " + out.size() + " stazioni RDS (prima " + stored.size() + " voci, nuove " + added + ") - " + why);
+        } catch (Throwable t) {
+            warn("storeNamed", t);
+        }
+    }
+
+    private static boolean sameList(List<RadioManager.ProgramInfo> a, List<RadioManager.ProgramInfo> b) {
+        if (a.size() != b.size()) return false;
+        java.util.Set<String> sa = new java.util.HashSet<String>();
+        for (RadioManager.ProgramInfo e : a) sa.add(khz(e.getSelector().getPrimaryId().getValue()) + "|" + psOf(e));
+        for (RadioManager.ProgramInfo e : b) {
+            if (!sa.contains(khz(e.getSelector().getPrimaryId().getValue()) + "|" + psOf(e))) return false;
+        }
+        return true;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static List<RadioManager.ProgramInfo> takeTemp(RadioService svc, String field) {
+        List<RadioManager.ProgramInfo> out = new java.util.ArrayList<RadioManager.ProgramInfo>();
+        try {
+            Object o = field(svc, field);
+            if (o instanceof List) {
+                out.addAll((List) o);
+                ((List) o).clear(); // il firmware non salvera' questa lista: la gestiamo noi
+            }
+        } catch (Throwable t) {
+            warn("takeTemp", t);
+        }
+        return out;
+    }
+
+    /** ProgramInfo nuovo per una frequenza, con il nome RDS. */
+    private static RadioManager.ProgramInfo newInfo(int k, String ps) {
+        try {
+            java.lang.reflect.Constructor<RadioManager.ProgramInfo> c = RadioManager.ProgramInfo.class.getConstructor(
+                    android.hardware.radio.ProgramSelector.class,
+                    android.hardware.radio.ProgramSelector.Identifier.class,
+                    android.hardware.radio.ProgramSelector.Identifier.class,
+                    java.util.Collection.class, int.class, int.class,
+                    android.hardware.radio.RadioMetadata.class, Map.class);
+            android.hardware.radio.RadioMetadata meta = new android.hardware.radio.RadioMetadata.Builder()
+                    .putString("android.hardware.radio.metadata.RDS_PS", ps).build();
+            return c.newInstance(com.saicmotor.service.radio.platform.ProgramSelectorExt.createAmFmSelector(k),
+                    null, null, null, 0, 0, meta, null);
+        } catch (Throwable t) {
+            warn("newInfo", t);
+            return null;
+        }
+    }
+
+    // ---------------------------------------------------------------- elenco di sottofondo (senza interrompere l'audio)
+
+    private static volatile boolean sBgListOff = false;
+    private static final long BG_LIST_PERIOD_MS = 30 * 60 * 1000L;
+
+    private static final Runnable BG_LIST = new Runnable() {
+        @Override public void run() {
+            MAIN.removeCallbacks(this);
+            if (sBgListOff) return;
+            MAIN.postDelayed(this, BG_LIST_PERIOD_MS);
+            if (sScanning || sVerifying) return;
+            startBgList();
+        }
+    };
+
+    /**
+     * Android 9 ha un elenco programmi gestito dal sintonizzatore in sottofondo
+     * (RadioTuner.getDynamicProgramList), che non interrompe l'audio. Se questo sintonizzatore lo
+     * supporta, ogni 30 minuti aggiungiamo alla lista le stazioni con nome RDS che contiene.
+     * Se non e' supportato non si fa nulla (niente ricerche che interrompono la musica).
+     */
+    private static void startBgList() {
+        try {
+            RadioService svc = sService;
+            if (svc == null || svc.getAmFmRadioTuner() == null) return;
+            Object tuner = svc.getAmFmRadioTuner();
+            final Object pl = tuner.getClass().getMethod("getDynamicProgramList",
+                    Class.forName("android.hardware.radio.ProgramList$Filter")).invoke(tuner, (Object) null);
+            if (pl == null) {
+                sBgListOff = true;
+                log("elenco di sottofondo non supportato dal sintonizzatore");
+                return;
+            }
+            MAIN.postDelayed(new Runnable() {
+                @SuppressWarnings("rawtypes")
+                @Override public void run() {
+                    try {
+                        Object l = pl.getClass().getMethod("toList").invoke(pl);
+                        List<RadioManager.ProgramInfo> fm = new java.util.ArrayList<RadioManager.ProgramInfo>();
+                        int total = 0;
+                        if (l instanceof List) {
+                            for (Object o : (List) l) {
+                                total++;
+                                if (o instanceof RadioManager.ProgramInfo) {
+                                    RadioManager.ProgramInfo i = (RadioManager.ProgramInfo) o;
+                                    if (i.getSelector().getProgramType() == 2 && psOf(i) != null) fm.add(i);
+                                }
+                            }
+                        }
+                        log("elenco di sottofondo: " + total + " programmi, " + fm.size() + " FM con nome RDS");
+                        if (!fm.isEmpty() && !sScanning && !sVerifying) storeNamed(fm, false, "elenco di sottofondo");
+                    } catch (Throwable t) {
+                        warn("bgList read", t);
+                    } finally {
+                        try { pl.getClass().getMethod("close").invoke(pl); } catch (Throwable ignored) { }
+                    }
+                }
+            }, 20000);
+        } catch (Throwable t) {
+            sBgListOff = true;
+            log("elenco di sottofondo non disponibile: " + t);
         }
     }
 
@@ -1130,6 +1262,7 @@ public final class RadioFix {
     /** Alla creazione del servizio: tentativi di ripresa se il BOOT_COMPLETED arriva troppo presto/tardi. */
     public static void scheduleBootResume(final RadioService svc) {
         sService = svc;
+        MAIN.postDelayed(BG_LIST, 3 * 60 * 1000L);
         long[] delays = {6000, 14000};
         for (long d : delays) {
             MAIN.postDelayed(new Runnable() {
