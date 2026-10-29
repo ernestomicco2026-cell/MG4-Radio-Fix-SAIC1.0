@@ -60,7 +60,7 @@ jobs:
         id: notes
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          APK="RadioService_radiofix5_${FW_VERSION}.apk"
+          APK="RadioService_radiofix6_${FW_VERSION}.apk"
           SHA="$(sha256sum "dist/$APK" | cut -d' ' -f1)"
           echo "$SHA  $APK" > "dist/SHA256SUMS.txt"
           (cd dist && sha256sum RadioFixRemover_*.apk) >> "dist/SHA256SUMS.txt"
