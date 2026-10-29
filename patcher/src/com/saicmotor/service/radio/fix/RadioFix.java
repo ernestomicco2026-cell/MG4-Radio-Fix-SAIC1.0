@@ -541,13 +541,56 @@ public final class RadioFix {
         return true;
     }
 
+    /**
+     * Lista FM gia' piena ma fatta soprattutto di frequenze senza nome (ricerca vecchia, senza
+     * verifica RDS): la verifichiamo da sole, senza nuova ricerca. Al massimo una volta al giorno se
+     * non riesce (la verifica tiene la radio muta per un paio di minuti).
+     */
+    private static void maybeAutoVerify(final RadioBean bean, List<RadioManager.ProgramInfo> stored) {
+        int n = stored.size();
+        if (n < 10) return;
+        int named = 0;
+        for (RadioManager.ProgramInfo i : stored) if (psOf(i) != null) named++;
+        if (named * 2 >= n) return;
+        final RadioService svc = sService;
+        SharedPreferences p = prefs(svc);
+        long last = p.getLong("autoVerifyAt", 0);
+        long now = System.currentTimeMillis();
+        if (now - last < 24L * 3600 * 1000 && now >= last) return;
+        sAutoScanDone = true;
+        p.edit().putLong("autoVerifyAt", now).apply();
+        log("lista FM con " + n + " voci di cui solo " + named + " con nome: verifica RDS tra 10 s");
+        MAIN.postDelayed(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (sScanning || sVerifying) return;
+                    RadioBean cur = svc.getCurrentRadioInfo();
+                    if (cur == null || cur.getRadioType() != 2) return;
+                    RadioBean prev = null;
+                    if (cur.getRadioState() == 1) {
+                        prev = new RadioBean();
+                        prev.setRadioType(2);
+                        prev.setFrequencyKhz(cur.getFrequencyKhz());
+                        prev.setRadioState(1);
+                    }
+                    startVerify(svc, prev, 0);
+                } catch (Throwable t) {
+                    warn("autoVerify", t);
+                }
+            }
+        }, 10000);
+    }
+
     /** Una volta per accensione: se la lista FM ha 0 o 1 stazioni e si ascolta l'FM, cerca da sola. */
     private static void maybeAutoScan(RadioBean bean) {
         try {
             if (sAutoScanDone || sScanning || sService == null || bean == null || bean.getRadioType() != 2) return;
             List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
             int n = stored == null ? 0 : stored.size();
-            if (n > 1) return;
+            if (n > 1) {
+                maybeAutoVerify(bean, stored);
+                return;
+            }
             sAutoScanDone = true;
             log("lista FM con " + n + " stazioni: ricerca automatica tra 8 s");
             MAIN.postDelayed(new Runnable() {
