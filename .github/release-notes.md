@@ -13,8 +13,9 @@ Correzioni al **servizio radio originale** dell'MG4 con infotainment **SAIC 1.0*
 ## Cosa corregge
 
 - 📻 **FM bloccato su una stazione** — la lista stazioni non si riduce più a un'unica frequenza (es. resta sulla 90.90 e avanti/indietro non cambiano). Ora si aggiorna solo durante una vera ricerca.
-- 📻 **Lista FM solo con stazioni RDS** — *novità v1.5.* Niente più frequenze senza stazione: in lista entrano solo stazioni con nome RDS, una per nome. Le stazioni si aggiungono da sole quando le ascolti; "aggiorna lista" rifà la lista con una verifica RDS a radio muta (1–2 minuti).
-- ⚙️ **App Radio e impostazioni** — *novità v1.5.* Dopo "cerca" / "aggiorna lista" l'app Radio non resta più bloccata; gli interruttori delle impostazioni (annuncio traffico, frequenza alternativa…) non tornano più indietro.
+- 📶 **Frequenza alternativa (AF) che funziona** — *novità v1.6.* Se una stazione si sente male, la radio passa da sola a un'altra frequenza della stessa stazione, anche subito dopo averla scelta. Serve **AF attivo** nelle impostazioni della radio.
+- 📻 **Lista FM solo con stazioni RDS** — Niente più frequenze senza stazione: in lista entrano solo stazioni con nome RDS, una per nome. Le stazioni si aggiungono da sole quando le ascolti; "aggiorna lista" rifà la lista con una verifica RDS a radio muta (1–2 minuti).
+- ⚙️ **App Radio e impostazioni** — Dopo "cerca" / "aggiorna lista" l'app Radio non resta più bloccata; gli interruttori delle impostazioni (annuncio traffico, frequenza alternativa…) non tornano più indietro.
 - 🏷️ **Nomi RDS delle stazioni** — Il nome RDS della stazione in ascolto viene salvato anche nella lista: non si vede più solo la frequenza dopo una ricerca.
 - 📻 **Lista FM protetta e ricerca FM** — La lista FM non si riduce più a una sola stazione quando il sintonizzatore fa una ricerca in sottofondo. Il comando "cerca" in FM ora fa davvero la ricerca FM (prima faceva sempre quella AM) e, se la lista FM è vuota o ha una sola stazione, la radio la rifà da sola.
 - 🛡️ **Stabilità** — Un promemoria DAB salvato senza ora non fa più bloccare il servizio a ogni avvio (sui firmware più vecchi riavviava tutto l'infotainment). Un errore in un'operazione in background non chiude più il servizio radio. Niente errore all'avvio se il sintonizzatore non è ancora pronto.

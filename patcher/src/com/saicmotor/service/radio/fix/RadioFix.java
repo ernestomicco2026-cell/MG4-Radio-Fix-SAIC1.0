@@ -45,10 +45,10 @@ public final class RadioFix {
     /** Dopo un nostro tune/step i ProgramInfo in arrivo sono "eco" della sintonia, non un cambio AF. */
     private static final long TUNE_ECHO_WINDOW_MS = 5000;
 
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
 
-    private static volatile boolean sScanning = false;
+    static volatile boolean sScanning = false;
     private static volatile long sScanStart = 0;
     private static volatile long sLastFocusLoss = 0;
     private static volatile boolean sBootResumeDone = false;
@@ -63,7 +63,7 @@ public final class RadioFix {
     private static final long VERIFY_STEP_MAX_MS = 2500;
     private static final long VERIFY_AFTER_PS_MS = 500;
     private static final int VERIFY_MAX_STATIONS = 90;
-    private static volatile boolean sVerifying = false;
+    static volatile boolean sVerifying = false;
     private static List<RadioManager.ProgramInfo> sVerifyList;
     private static int sVerifyIdx;
     private static volatile int sVerifyFreq;
@@ -73,14 +73,14 @@ public final class RadioFix {
     private static final Map<Integer, String> sVerifyNames = new HashMap<Integer, String>();
     private static final Map<Integer, Long> sLastNamed = new HashMap<Integer, Long>();
     private static final long RENAME_MIN_INTERVAL_MS = 30 * 60 * 1000L;
-    private static volatile RadioService sService;
+    static volatile RadioService sService;
     private static final Map<String, Long> sLastCacheSave = new HashMap<String, Long>();
 
     private RadioFix() {}
 
-    private static void log(String s) { Log.i(TAG, s); }
+    static void log(String s) { Log.i(TAG, s); }
 
-    private static void warn(String s, Throwable t) { Log.w(TAG, s, t); }
+    static void warn(String s, Throwable t) { Log.w(TAG, s, t); }
 
     // ---------------------------------------------------------------- FM: lista stazioni
 
@@ -95,6 +95,25 @@ public final class RadioFix {
     /** Chiamato a ogni tune/step/seek AM/FM chiesto dal servizio (RadioTunerExt). */
     public static void onTune() {
         sLastTune = System.currentTimeMillis();
+    }
+
+    /** RadioTunerExt.tune(ProgramSelector): come onTune, con la frequenza chiesta (riconoscere le eco). */
+    public static void onTune(Object selector) {
+        sLastTune = System.currentTimeMillis();
+        try {
+            RadioFixAf.onTuneSelector(selector);
+        } catch (Throwable t) {
+            warn("onTune", t);
+        }
+    }
+
+    /** Inizio di RadioService$6.onSignalInfoChanged(RadioSignal): segnale per l'AF attivo e i log. */
+    public static void onSignal(Object radioSignal) {
+        try {
+            RadioFixAf.onSignal(radioSignal);
+        } catch (Throwable t) {
+            warn("onSignal", t);
+        }
     }
 
     /** Chiamato quando la lista scansionata viene salvata (RadioService.amOrFmScanOver). */
@@ -226,6 +245,15 @@ public final class RadioFix {
     public static void onRdsConfigApplied(int result, Object cfg) {
         try {
             log("setRdsConfig -> " + result + " (" + cfgText(cfg) + ")");
+            try {
+                RadioService svc = sService;
+                if (svc != null && cfg != null) {
+                    boolean af = Boolean.TRUE.equals(cfg.getClass().getMethod("getAF").invoke(cfg));
+                    RadioFixAf.syncAfFlag(svc, af, "impostazioni");
+                }
+            } catch (Throwable t) {
+                warn("syncAfFlag", t);
+            }
             MAIN.removeCallbacks(NOTIFY_CFG);
             MAIN.postDelayed(NOTIFY_CFG, 1500);
         } catch (Throwable t) {
@@ -339,7 +367,10 @@ public final class RadioFix {
             if (!(f instanceof Number) || psRaw == null) return;
             String ps = psRaw instanceof char[] ? new String((char[]) psRaw) : String.valueOf(psRaw);
             long v = ((Number) f).longValue();
-            verifyGotName((int) (v < 20000 ? v * 10 : v), ps);
+            int k = (int) (v < 20000 ? v * 10 : v);
+            String clean = ps.replace('\u0000', ' ').trim();
+            if (!clean.isEmpty()) RadioFixAf.remember(k, piCode(mainInfo), clean, -1);
+            verifyGotName(k, ps);
         } catch (Throwable t) {
             warn("verifyName", t);
         }
@@ -357,7 +388,7 @@ public final class RadioFix {
         MAIN.postDelayed(VERIFY_TIMEOUT, VERIFY_AFTER_PS_MS);
     }
 
-    private static int signal(RadioManager.ProgramInfo i) {
+    static int signal(RadioManager.ProgramInfo i) {
         try { return i.getSignalStrength(); } catch (Throwable t) { return 0; }
     }
 
@@ -404,7 +435,7 @@ public final class RadioFix {
         reapplyRdsConfig(svc);
     }
 
-    private static void unmute(RadioService svc) {
+    static void unmute(RadioService svc) {
         try {
             if (svc.getAudioController() != null) svc.getAudioController().unMute();
             else svc.getAmFmRadioTuner().setMuted(false);
@@ -598,9 +629,13 @@ public final class RadioFix {
             // fuori dalla scansione non si aggiunge nulla alla lista (nemmeno se e' vuota:
             // diventerebbe una lista di una sola stazione). Se e' vuota parte la ricerca automatica.
             if (type == 2) {
+                if (RadioFixAf.isProbing()) { // prova dell'AF attivo: non e' una stazione da salvare
+                    RadioFixAf.onProgramInfo(info);
+                    return false;
+                }
                 String ps = psOf(info);
-                if (ps != null) nameStation(khz(value), ps, info);
-                followAf(info);
+                if (ps != null) nameStation(RadioFixAf.freqOf(info), ps, info);
+                RadioFixAf.onProgramInfo(info);
             }
             else log("ignored program info outside scan: " + value + " type " + type);
             return false;
@@ -612,11 +647,11 @@ public final class RadioFix {
 
     // ---------------------------------------------------------------- FM: nomi RDS nella lista
 
-    private static int khz(long v) {
+    static int khz(long v) {
         return (int) (v < 87500 ? v * 10 : v);
     }
 
-    private static String psOf(RadioManager.ProgramInfo info) {
+    static String psOf(RadioManager.ProgramInfo info) {
         try {
             android.hardware.radio.RadioMetadata m = info == null ? null : info.getMetadata();
             String ps = m == null ? null : m.getString("android.hardware.radio.metadata.RDS_PS");
@@ -634,6 +669,15 @@ public final class RadioFix {
      * sostituisce con la voce della lista: se la voce non ha nome si vede solo la frequenza.
      * Qui scriviamo il nome anche nella voce della lista.
      */
+    static int piCode(Object mainInfo) {
+        try {
+            Object p = mainInfo.getClass().getMethod("getPiCode").invoke(mainInfo);
+            return p instanceof Number ? ((Number) p).intValue() : -1;
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
     public static void onRdsMain(Object mainInfo) {
         try {
             if (sVerifying) {
@@ -649,6 +693,9 @@ public final class RadioFix {
             if (ps.isEmpty() || "null".equals(ps)) return;
             long v = ((Number) f).longValue();
             int k = (int) (v < 20000 ? v * 10 : v); // l'HAL usa unita' da 10 kHz
+            int pic = piCode(mainInfo);
+            RadioFixAf.onMainInfo(k, pic, ps);
+            if (RadioFixAf.isProbing()) return;
             nameStation(k, ps, null);
         } catch (Throwable t) {
             warn("onRdsMain", t);
@@ -688,9 +735,47 @@ public final class RadioFix {
         }
     }
 
+    /**
+     * La stazione e' passata a una frequenza migliore (AF): nella lista la sua voce prende la nuova
+     * frequenza, cosi' la volta dopo si parte gia' da quella buona.
+     */
+    static synchronized void replaceStationFreq(int oldF, int newF, String ps) {
+        try {
+            if (oldF == newF || newF < 87500 || newF > 108000) return;
+            List<RadioManager.ProgramInfo> stored = RadioStorage.getInstance().getValidRadios(2).toList();
+            if (stored == null || stored.isEmpty()) return;
+            String key = ps == null ? null : nameKey(ps);
+            List<RadioManager.ProgramInfo> out = new java.util.ArrayList<RadioManager.ProgramInfo>();
+            String name = ps;
+            boolean found = false;
+            for (RadioManager.ProgramInfo e : stored) {
+                int f = khz(e.getSelector().getPrimaryId().getValue());
+                String eps = psOf(e);
+                boolean match = f == oldF || f == newF || (key != null && eps != null && nameKey(eps).equals(key));
+                if (match) {
+                    if (name == null) name = eps;
+                    found = true;
+                    continue;
+                }
+                out.add(e);
+            }
+            if (!found || name == null) {
+                log("lista FM: " + oldF + " -> " + newF + " non aggiornata (stazione non in lista)");
+                return;
+            }
+            RadioManager.ProgramInfo ni = newInfo(newF, name);
+            if (ni == null) return;
+            out.add(ni);
+            RadioStorage.getInstance().addAmFmRadio(out, 2);
+            log("lista FM: " + name + " ora su " + newF + " (prima " + oldF + ")");
+        } catch (Throwable t) {
+            warn("replaceStationFreq", t);
+        }
+    }
+
     // ---------------------------------------------------------------- lista FM: solo stazioni RDS
 
-    private static String nameKey(String ps) {
+    static String nameKey(String ps) {
         return ps == null ? "" : ps.toUpperCase().replace(" ", "").replace(".", "");
     }
 
@@ -781,7 +866,7 @@ public final class RadioFix {
     }
 
     /** ProgramInfo nuovo per una frequenza, con il nome RDS. */
-    private static RadioManager.ProgramInfo newInfo(int k, String ps) {
+    static RadioManager.ProgramInfo newInfo(int k, String ps) {
         try {
             java.lang.reflect.Constructor<RadioManager.ProgramInfo> c = RadioManager.ProgramInfo.class.getConstructor(
                     android.hardware.radio.ProgramSelector.class,
@@ -864,7 +949,7 @@ public final class RadioFix {
     }
 
     /** Copia della voce con il nome RDS nei metadati (costruttore nascosto: riflessione). */
-    private static RadioManager.ProgramInfo withName(RadioManager.ProgramInfo e, String ps) {
+    static RadioManager.ProgramInfo withName(RadioManager.ProgramInfo e, String ps) {
         java.lang.reflect.Constructor<RadioManager.ProgramInfo> c;
         android.hardware.radio.RadioMetadata meta;
         try {
@@ -900,37 +985,11 @@ public final class RadioFix {
         }
     }
 
-    /** Aggiorna la stazione FM corrente quando il sintonizzatore passa da solo a un'altra frequenza. */
-    private static void followAf(RadioManager.ProgramInfo info) {
-        try {
-            RadioService svc = sService;
-            if (svc == null) return;
-            RadioBean found = boxFm(info);
-            if (found == null) return;
-            int freq = found.getFrequencyKhz();
-            RadioBean cur = svc.getCurrentRadioInfo();
-            if (cur == null || cur.getRadioType() != 2) return;
-            int was = cur.getFrequencyKhz();
-            if (freq == was) return; // eco della frequenza in ascolto
-            if (freq < 87500 || freq > 108000) return;
-            long since = System.currentTimeMillis() - sLastTune;
-            if (since < TUNE_ECHO_WINDOW_MS) {
-                log("ignored tune echo " + freq + " (current " + was + ", " + since + " ms after tune)");
-                return;
-            }
-            found.setRadioState(cur.getRadioState());
-            log("AF follow " + was + " -> " + freq + " (" + found.getRadioName() + ")");
-            svc.updateCurrentRadio(found);
-        } catch (Throwable t) {
-            warn("followAf", t);
-        }
-    }
-
     /**
      * ProgramInfo FM -> RadioBean come fa il firmware (RadioWrapper.box: nome RDS, preferito...).
      * Chiamato per riflessione perche' RadioWrapper usa classi nascoste del framework.
      */
-    private static RadioBean boxFm(RadioManager.ProgramInfo info) {
+    static RadioBean boxFm(RadioManager.ProgramInfo info) {
         try {
             Object b = Class.forName("com.saicmotor.service.radio.utils.RadioWrapper")
                     .getMethod("box", RadioManager.ProgramInfo.class).invoke(null, info);
@@ -1212,7 +1271,7 @@ public final class RadioFix {
 
     // ---------------------------------------------------------------- ripresa all'avvio
 
-    private static SharedPreferences prefs(Context c) {
+    static SharedPreferences prefs(Context c) {
         return c.getSharedPreferences("radiofix", Context.MODE_PRIVATE);
     }
 
@@ -1263,6 +1322,9 @@ public final class RadioFix {
     public static void scheduleBootResume(final RadioService svc) {
         sService = svc;
         MAIN.postDelayed(BG_LIST, 3 * 60 * 1000L);
+        MAIN.postDelayed(new Runnable() {
+            @Override public void run() { RadioFixAf.checkRdsAtBoot(); }
+        }, 20000);
         long[] delays = {6000, 14000};
         for (long d : delays) {
             MAIN.postDelayed(new Runnable() {
@@ -1378,7 +1440,7 @@ public final class RadioFix {
 
     // ---------------------------------------------------------------- util
 
-    private static Object field(Object o, String name) throws Exception {
+    static Object field(Object o, String name) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);
         return f.get(o);

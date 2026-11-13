@@ -45,7 +45,7 @@ patch('platform/RadioTunerExt.smali',
       '.method public tune(Landroid/hardware/radio/ProgramSelector;)V\n    .locals 2\n'
       '    .param p1, "selector"    # Landroid/hardware/radio/ProgramSelector;\n'
       '        .annotation build Landroidx/annotation/NonNull;\n        .end annotation\n    .end param\n\n'
-      '    invoke-static {}, ' + FIX + '->onTune()V\n')
+      '    invoke-static {p1}, ' + FIX + '->onTune(Ljava/lang/Object;)V\n')
 patch('RadioService.smali',
       '.method private amOrFmScanOver()V\n    .locals 3\n',
       '.method private amOrFmScanOver()V\n    .locals 3\n\n'
@@ -215,4 +215,13 @@ patch('RadioService$6.smali',
       '    .locals 3\n'
       '    .param p1, "config"    # Landroid/hardware/radio/RadioManager$RdsConfig;\n\n'
       '    invoke-static {p1}, ' + FIX + '->onHalRdsConfig(Ljava/lang/Object;)V\n')
+# 13) segnale della stazione in ascolto: AF attivo e log (radiofix7)
+patch('RadioService$6.smali',
+      '.method public onSignalInfoChanged(Landroid/hardware/radio/RadioSignal;)V\n'
+      '    .locals 3\n'
+      '    .param p1, "info"    # Landroid/hardware/radio/RadioSignal;\n',
+      '.method public onSignalInfoChanged(Landroid/hardware/radio/RadioSignal;)V\n'
+      '    .locals 3\n'
+      '    .param p1, "info"    # Landroid/hardware/radio/RadioSignal;\n\n'
+      '    invoke-static {p1}, ' + FIX + '->onSignal(Ljava/lang/Object;)V\n')
 print('tutti gli hook applicati')
