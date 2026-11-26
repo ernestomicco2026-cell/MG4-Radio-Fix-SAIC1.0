@@ -1,9 +1,13 @@
 name: Build e Release
 
 # Si avvia quando pubblichi un tag "v..." (es. v1.1), oppure a mano da Actions → "Run workflow".
+# Release automatica: si avvia anche quando su main cambia il file VERSION (es. 1.6 → Release v1.6), cioè quando una
+# nuova versione approvata da Ernesto viene pubblicata. Se la Release esiste già non fa niente.
 on:
   push:
     tags: ['v*']
+    branches: [main]
+    paths: ['VERSION']
   workflow_dispatch:
     inputs:
       tag:
@@ -22,12 +26,32 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Versione e controllo
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            if [ "${{ github.ref_type }}" = "tag" ]; then TAG="${{ github.ref_name }}"; else TAG="v$(tr -d ' \r\n' < VERSION)"; fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_type }}" = "branch" ] && [ "${{ github.event_name }}" = "push" ] && \
+             gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "La Release $TAG esiste già: non faccio niente."
+            echo "fai=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "fai=si" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-java@v5
+        if: steps.v.outputs.fai == 'si'
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Decifra l'APK originale
+        if: steps.v.outputs.fai == 'si'
         env:
           FIRMWARE_KEY: ${{ secrets.FIRMWARE_KEY }}
         run: |
@@ -48,6 +72,7 @@ jobs:
           echo "SHA-256 originale: $(sha256sum "$RUNNER_TEMP/fw/original.apk" | cut -d' ' -f1)"
 
       - name: Costruisci e firma
+        if: steps.v.outputs.fai == 'si'
         run: |
           mkdir -p dist
           cd dist
@@ -57,9 +82,10 @@ jobs:
           ls -la
 
       - name: Prepara la descrizione
+        if: steps.v.outputs.fai == 'si'
         id: notes
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG="${{ steps.v.outputs.tag }}"
           APK="RadioService_radiofix7_${FW_VERSION}.apk"
           SHA="$(sha256sum "dist/$APK" | cut -d' ' -f1)"
           echo "$SHA  $APK" > "dist/SHA256SUMS.txt"
@@ -70,6 +96,7 @@ jobs:
           echo "apk=dist/$APK" >> "$GITHUB_OUTPUT"
 
       - name: Pubblica la release
+        if: steps.v.outputs.fai == 'si'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.notes.outputs.tag }}
